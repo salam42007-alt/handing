@@ -41,6 +41,7 @@
       <button class="tab active" data-tab="live">🎯 مباشر</button>
       <button class="tab" data-tab="challenge">⚡ تحديات</button>
       <button class="tab" data-tab="powers">🧠 قدرات</button>
+      <button class="tab" data-tab="signs">🤞 لغة الأصابع</button>
     </nav>
 
     <div id="hdr-info">
@@ -138,6 +139,26 @@
         </div>
       </div>
 
+
+      <!-- ── SIGNS overlays ── -->
+      <div id="ov-signs" class="tab-ov">
+        <div id="sg-word-box">
+          <div id="sg-word">✋</div>
+          <div id="sg-word-ar">ارفع إصبعًا</div>
+        </div>
+        <div id="sg-guide">
+          <div class="sg-fc" id="sgc-thumb"><div class="sg-fi">👍</div><div class="sg-fw">أنا</div></div>
+          <div class="sg-fc" id="sgc-index"><div class="sg-fi">☝️</div><div class="sg-fw">لا</div></div>
+          <div class="sg-fc" id="sgc-middle"><div class="sg-fi">🖕</div><div class="sg-fw">--</div></div>
+          <div class="sg-fc" id="sgc-ring"><div class="sg-fi">💍</div><div class="sg-fw">أحبك</div></div>
+          <div class="sg-fc" id="sgc-pinky"><div class="sg-fi">🤙</div><div class="sg-fw">معكوس</div></div>
+        </div>
+        <div id="sg-sent-wrap">
+          <div id="sg-sent"></div>
+          <button id="sg-clear">🗑</button>
+        </div>
+      </div>
+
     </div><!-- end cam-box -->
 
     <!-- ── SIDE PANELS (one per tab) ── -->
@@ -217,6 +238,56 @@
             <div id="pw-steps"></div>
           </div>
         </div>
+      </aside>
+
+
+      <!-- SIGNS panel -->
+      <aside id="panel-signs" class="panel">
+        <div class="pt"><span>لغة الأصابع</span><span class="pb">5</span></div>
+
+        <div id="sg-map">
+          <div class="sg-row"><div class="sg-key">👍 الإبهام</div><div class="sg-val" id="sgv-thumb">أنا</div></div>
+          <div class="sg-row"><div class="sg-key">☝️ السبابة</div><div class="sg-val" id="sgv-index">لا</div></div>
+          <div class="sg-row"><div class="sg-key">🖕 الوسطى</div><div class="sg-val" id="sgv-middle">--</div></div>
+          <div class="sg-row"><div class="sg-key">💍 البنصر</div><div class="sg-val" id="sgv-ring">أحبك</div></div>
+          <div class="sg-row"><div class="sg-key">🤙 الخنصر</div><div class="sg-val" id="sgv-pinky">معكوس</div></div>
+        </div>
+
+        <div class="pt" style="margin-top:8px"><span>كيفية الاستخدام</span></div>
+        <div id="sg-instructions">
+          <div class="sg-inst">١. ارفع إصبعًا واحدًا فقط</div>
+          <div class="sg-inst">٢. ثبّته لثانية لتضيف الكلمة</div>
+          <div class="sg-inst">٣. تُبنى الجملة تلقائياً</div>
+          <div class="sg-inst">٤. اضغط 🗑 لمسح الجملة</div>
+        </div>
+
+        <div class="pt" style="margin-top:8px"><span>الجملة الحالية</span><span class="pb" id="sg-word-count">0 كلمة</span></div>
+        <div id="sg-full-sent"></div>
+
+        <div class="pt" style="margin-top:8px"><span>تخصيص الكلمات</span></div>
+        <div id="sg-custom">
+          <div class="sg-custom-row">
+            <span class="sg-key">👍</span>
+            <input class="sg-inp" id="sgi-thumb" value="أنا" maxlength="12"/>
+          </div>
+          <div class="sg-custom-row">
+            <span class="sg-key">☝️</span>
+            <input class="sg-inp" id="sgi-index" value="لا" maxlength="12"/>
+          </div>
+          <div class="sg-custom-row">
+            <span class="sg-key">🖕</span>
+            <input class="sg-inp" id="sgi-middle" value="--" maxlength="12"/>
+          </div>
+          <div class="sg-custom-row">
+            <span class="sg-key">💍</span>
+            <input class="sg-inp" id="sgi-ring" value="أحبك" maxlength="12"/>
+          </div>
+          <div class="sg-custom-row">
+            <span class="sg-key">🤙</span>
+            <input class="sg-inp" id="sgi-pinky" value="معكوس" maxlength="12"/>
+          </div>
+        </div>
+
       </aside>
 
     </div><!-- end panels -->
