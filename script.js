@@ -1,13 +1,14 @@
 // =========================================================
-//  NEUROHAND v3.0 — script.js
-//  Three tabs: Live | Challenge | Powers
-//  Powers: 2-hand support, record up to 20 gestures,
-//          save temporarily, test/playback with error report
+//  NEUROHAND v4.0
+//
+//  KEY DESIGN:
+//  - ONE <video> with visibility:hidden  →  camera always ON
+//  - ONE <canvas> that draws: camera frame (mirrored) + skeleton
+//  - Tabs only switch which overlays/panel are visible
+//  - NO second camera, NO second canvas, NO drawImage conflicts
 // =========================================================
 
-// ══════════════════════════════════════════════════════════
-//  HAND CONNECTIONS (defined manually — CDN doesn't export)
-// ══════════════════════════════════════════════════════════
+// ── Skeleton connections ───────────────────────────────────
 const HAND_CONNECTIONS = [
   [0,1],[1,2],[2,3],[3,4],
   [0,5],[5,6],[6,7],[7,8],
@@ -17,9 +18,6 @@ const HAND_CONNECTIONS = [
   [0,17],[5,9],[9,13],[13,17],
 ];
 
-// ══════════════════════════════════════════════════════════
-//  LANDMARK INDICES
-// ══════════════════════════════════════════════════════════
 const LM = {
   WRIST:0,
   THUMB_CMC:1,THUMB_MCP:2,THUMB_IP:3,THUMB_TIP:4,
@@ -29,249 +27,234 @@ const LM = {
   PINKY_MCP:17,PINKY_PIP:18,PINKY_DIP:19,PINKY_TIP:20,
 };
 
-const GESTURE_COLORS = {
+const G_COLORS = {
   thumb_up:'#4ade80', peace:'#38bdf8', open_hand:'#fb923c',
   gun:'#f472b6', three_fingers:'#c084fc',
 };
 
-// ══════════════════════════════════════════════════════════
-//  DOM REFS
-// ══════════════════════════════════════════════════════════
-const videoEl       = document.getElementById('video');
-const statusDot     = document.getElementById('status-dot');
-const statusText    = document.getElementById('status-text');
-const fpsCounter    = document.getElementById('fps-counter');
-const clockDisplay  = document.getElementById('clock-display');
+// ── DOM ────────────────────────────────────────────────────
+const vid         = document.getElementById('vid');
+const cv          = document.getElementById('cv');
+const cx          = cv.getContext('2d');
+const statusDot   = document.getElementById('status-dot');
+const statusText  = document.getElementById('status-text');
+const fpsEl       = document.getElementById('fps-el');
+const clockEl     = document.getElementById('clock-el');
+// live
+const gbadge      = document.getElementById('gesture-badge');
+const gbEmoji     = document.getElementById('gb-emoji');
+const gbLabel     = document.getElementById('gb-label');
+const gbName      = document.getElementById('gb-name');
+const ringP       = document.getElementById('ring-p');
+const handCountEl = document.getElementById('hand-count');
+const lmCountEl   = document.getElementById('lm-count');
+const gStateEl    = document.getElementById('g-state');
+const logEl       = document.getElementById('log');
+const logBadge    = document.getElementById('log-count');
+// challenge
+const chTarget    = document.getElementById('ch-target');
+const chTEmoji    = document.getElementById('ch-t-emoji');
+const chTName     = document.getElementById('ch-t-name');
+const chDEmoji    = document.getElementById('ch-d-emoji');
+const chDName     = document.getElementById('ch-d-name');
+const chTimerBar  = document.getElementById('ch-timer-bar');
+const chTimerNum  = document.getElementById('ch-timer-num');
+const chFlash     = document.getElementById('ch-flash');
+const chSeqEl     = document.getElementById('ch-seq');
+const chHistEl    = document.getElementById('ch-hist');
+const chScoreEl   = document.getElementById('ch-score');
+const chComboEl   = document.getElementById('ch-combo');
+const chStreakEl  = document.getElementById('ch-streak');
+const chLvlBadge  = document.getElementById('ch-lvl-badge');
+const chReqEl     = document.getElementById('ch-req');
+const chStarsEl   = document.getElementById('ch-stars');
+const chStartBtn  = document.getElementById('ch-start');
+const chResetBtn  = document.getElementById('ch-reset');
+// powers
+const pwRight     = document.getElementById('pw-right');
+const pwLeft      = document.getElementById('pw-left');
+const pwRecInd    = document.getElementById('pw-rec-ind');
+const pwBarWrap   = document.getElementById('pw-bar-wrap');
+const pwBarFill   = document.getElementById('pw-bar-fill');
+const pwBarLbl    = document.getElementById('pw-bar-lbl');
+const pwCd        = document.getElementById('pw-cd');
+const pwCdN       = document.getElementById('pw-cd-n');
+const pwCdS       = document.getElementById('pw-cd-s');
+const pwPlayOv    = document.getElementById('pw-play-ov');
+const pwPe        = document.getElementById('pw-pe');
+const pwPn        = document.getElementById('pw-pn');
+const pwProg      = document.getElementById('pw-prog');
+const pwBadge     = document.getElementById('pw-badge');
+const pwNameInput = document.getElementById('pw-name');
+const pwPreview   = document.getElementById('pw-preview');
+const pwBtnStart  = document.getElementById('pw-btn-start');
+const pwBtnStop   = document.getElementById('pw-btn-stop');
+const pwBtnClear  = document.getElementById('pw-btn-clear');
+const pwBtnSave   = document.getElementById('pw-btn-save');
+const pwBtnPlay   = document.getElementById('pw-btn-play');
+const pwSavedList = document.getElementById('pw-saved-list');
+const pwSavedCount= document.getElementById('pw-saved-count');
+const pwResult    = document.getElementById('pw-result');
+const pwOk        = document.getElementById('pw-ok');
+const pwErr       = document.getElementById('pw-err');
+const pwAcc       = document.getElementById('pw-acc');
+const pwSteps     = document.getElementById('pw-steps');
+const pwRecSec    = document.getElementById('pw-rec-sec');
+const pwPlaySec   = document.getElementById('pw-play-sec');
+const camBox      = document.getElementById('cam-box');
 
-// canvases — one per tab
-const canvasLive      = document.getElementById('canvas-live');
-const ctxLive         = canvasLive.getContext('2d');
-const canvasChallenge = document.getElementById('canvas-challenge');
-const ctxChallenge    = canvasChallenge.getContext('2d');
-const canvasPowers    = document.getElementById('canvas-powers');
-const ctxPowers       = canvasPowers.getContext('2d');
+// ── State ──────────────────────────────────────────────────
+let activeTab = 'live';
+let fpsF = 0, lastFpsT = performance.now();
+const RING_C = 2 * Math.PI * 44;
 
-// live tab
-const gestureOverlay = document.getElementById('gesture-overlay');
-const gestureMain    = document.getElementById('gesture-main');
-const gestureEmoji   = document.getElementById('gesture-emoji');
-const gestureLabel   = document.getElementById('gesture-label');
-const gestureNameEl  = document.getElementById('gesture-name');
-const ringProgress   = document.getElementById('ring-progress');
-const handCount      = document.getElementById('hand-count');
-const lmCount        = document.getElementById('lm-count');
-const gestureStateEl = document.getElementById('gesture-state-text');
-const activityLog    = document.getElementById('activity-log');
-const logCountEl     = document.getElementById('log-count');
-
-// challenge tab
-const chTargetBox     = document.getElementById('ch-target-box');
-const chTargetEmoji   = document.getElementById('ch-target-emoji');
-const chTargetName    = document.getElementById('ch-target-name');
-const chDetectedEmoji = document.getElementById('ch-detected-emoji');
-const chDetectedName  = document.getElementById('ch-detected-name');
-const chTimerBar      = document.getElementById('ch-timer-bar');
-const chTimerText     = document.getElementById('ch-timer-text');
-const chMatchFlash    = document.getElementById('ch-match-flash');
-const chSequenceEl    = document.getElementById('ch-sequence');
-const chHistoryEl     = document.getElementById('ch-history');
-const chScoreEl       = document.getElementById('ch-score');
-const chComboEl       = document.getElementById('ch-combo');
-const chStreakEl       = document.getElementById('ch-streak');
-const chLevelBadge    = document.getElementById('ch-level-badge');
-const chRequiredCount = document.getElementById('ch-required-count');
-const chStartBtn      = document.getElementById('ch-start-btn');
-const chResetBtn      = document.getElementById('ch-reset-btn');
-const chStarsEl       = document.getElementById('ch-stars');
-const chViewportWrap  = document.getElementById('ch-viewport-wrap');
-
-// powers tab
-const pwRightChip    = document.getElementById('pw-right-chip');
-const pwLeftChip     = document.getElementById('pw-left-chip');
-const pwRecOverlay   = document.getElementById('pw-rec-overlay');
-const pwRecCount     = document.getElementById('pw-rec-count');
-const pwRecLabelEl   = document.getElementById('pw-rec-label');
-const pwPlayOverlay  = document.getElementById('pw-play-overlay');
-const pwPlayStep     = document.getElementById('pw-play-step');
-const pwPlayInfo     = document.getElementById('pw-play-info');
-const pwRecBarWrap   = document.getElementById('pw-rec-bar-wrap');
-const pwRecBarFill   = document.getElementById('pw-rec-bar-fill');
-const pwRecBarLabel  = document.getElementById('pw-rec-bar-label');
-const pwRecPreview   = document.getElementById('pw-rec-preview');
-const pwSeqName      = document.getElementById('pw-seq-name');
-const pwRecStartBtn  = document.getElementById('pw-rec-start-btn');
-const pwRecStopBtn   = document.getElementById('pw-rec-stop-btn');
-const pwRecClearBtn  = document.getElementById('pw-rec-clear-btn');
-const pwRecSaveBtn   = document.getElementById('pw-rec-save-btn');
-const pwSavedList    = document.getElementById('pw-saved-list');
-const pwSavedCount   = document.getElementById('pw-saved-count');
-const pwResultBox    = document.getElementById('pw-result-box');
-const pwResCorrect   = document.getElementById('pw-res-correct');
-const pwResErrors    = document.getElementById('pw-res-errors');
-const pwResAccuracy  = document.getElementById('pw-res-accuracy');
-const pwResultSteps  = document.getElementById('pw-result-steps');
-const pwRecordSection   = document.getElementById('pw-record-section');
-const pwPlaybackSection = document.getElementById('pw-playback-section');
-const pwViewportWrap    = document.getElementById('pw-viewport-wrap');
-
-// ══════════════════════════════════════════════════════════
-//  SHARED STATE
-// ══════════════════════════════════════════════════════════
-const RING_CIRC  = 2 * Math.PI * 44;
-let fpsFrames    = 0;
-let lastFpsTime  = performance.now();
-let activeTab    = 'live';
-
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════
 //  GESTURE DETECTION
-// ══════════════════════════════════════════════════════════
-function isUp(lm, tip, pip) { return lm[tip].y < lm[pip].y - 0.04; }
-function isDown(lm, tip, mcp){ return lm[tip].y > lm[mcp].y - 0.01; }
-
+// ═══════════════════════════════════════════
+function isUp(lm,tip,pip)  { return lm[tip].y < lm[pip].y - 0.04; }
+function isDown(lm,tip,mcp){ return lm[tip].y > lm[mcp].y - 0.01; }
 function isThumbOut(lm) {
-  const tipX = lm[LM.THUMB_TIP].x, mcpX = lm[LM.THUMB_MCP].x, wX = lm[LM.WRIST].x;
-  const sideways = Math.abs(tipX - wX) > Math.abs(mcpX - wX) + 0.04;
-  const upward   = lm[LM.THUMB_TIP].y < lm[LM.THUMB_IP].y - 0.02 && lm[LM.THUMB_IP].y < lm[LM.THUMB_MCP].y;
-  return sideways || upward;
+  const tx=lm[LM.THUMB_TIP].x,mx=lm[LM.THUMB_MCP].x,wx=lm[LM.WRIST].x;
+  return Math.abs(tx-wx)>Math.abs(mx-wx)+0.04 ||
+        (lm[LM.THUMB_TIP].y<lm[LM.THUMB_IP].y-0.02 && lm[LM.THUMB_IP].y<lm[LM.THUMB_MCP].y);
 }
-
-function getF(lm) {
-  return {
-    thumb:  isThumbOut(lm),
-    index:  isUp(lm, LM.INDEX_TIP,  LM.INDEX_PIP),
-    middle: isUp(lm, LM.MIDDLE_TIP, LM.MIDDLE_PIP),
-    ring:   isUp(lm, LM.RING_TIP,   LM.RING_PIP),
-    pinky:  isUp(lm, LM.PINKY_TIP,  LM.PINKY_PIP),
-  };
-}
-
-function isThumbUp(lm)      { const f=getF(lm); return f.thumb && isDown(lm,LM.INDEX_TIP,LM.INDEX_MCP) && isDown(lm,LM.MIDDLE_TIP,LM.MIDDLE_MCP) && isDown(lm,LM.RING_TIP,LM.RING_MCP) && isDown(lm,LM.PINKY_TIP,LM.PINKY_MCP); }
-function isPeace(lm)        { const f=getF(lm); return !f.thumb && f.index && f.middle && isDown(lm,LM.RING_TIP,LM.RING_MCP) && isDown(lm,LM.PINKY_TIP,LM.PINKY_MCP); }
-function isOpenHand(lm)     { const f=getF(lm); return f.thumb && f.index && f.middle && f.ring && f.pinky; }
-function isGun(lm)          { const f=getF(lm); return f.thumb && f.index && isDown(lm,LM.MIDDLE_TIP,LM.MIDDLE_MCP) && isDown(lm,LM.RING_TIP,LM.RING_MCP) && isDown(lm,LM.PINKY_TIP,LM.PINKY_MCP); }
-function isThreeFingers(lm) { const f=getF(lm); return f.thumb && f.index && f.middle && isDown(lm,LM.RING_TIP,LM.RING_MCP) && isDown(lm,LM.PINKY_TIP,LM.PINKY_MCP); }
-
+const fi = lm=>({
+  th:isThumbOut(lm),
+  i:isUp(lm,LM.INDEX_TIP,LM.INDEX_PIP),
+  m:isUp(lm,LM.MIDDLE_TIP,LM.MIDDLE_PIP),
+  r:isUp(lm,LM.RING_TIP,LM.RING_PIP),
+  p:isUp(lm,LM.PINKY_TIP,LM.PINKY_PIP),
+});
+const detectors = {
+  open_hand:     lm => { const g=fi(lm); return g.th&&g.i&&g.m&&g.r&&g.p; },
+  three_fingers: lm => { const g=fi(lm); return g.th&&g.i&&g.m&&isDown(lm,LM.RING_TIP,LM.RING_MCP)&&isDown(lm,LM.PINKY_TIP,LM.PINKY_MCP); },
+  peace:         lm => { const g=fi(lm); return !g.th&&g.i&&g.m&&isDown(lm,LM.RING_TIP,LM.RING_MCP)&&isDown(lm,LM.PINKY_TIP,LM.PINKY_MCP); },
+  gun:           lm => { const g=fi(lm); return g.th&&g.i&&isDown(lm,LM.MIDDLE_TIP,LM.MIDDLE_MCP)&&isDown(lm,LM.RING_TIP,LM.RING_MCP)&&isDown(lm,LM.PINKY_TIP,LM.PINKY_MCP); },
+  thumb_up:      lm => { const g=fi(lm); return g.th&&isDown(lm,LM.INDEX_TIP,LM.INDEX_MCP)&&isDown(lm,LM.MIDDLE_TIP,LM.MIDDLE_MCP)&&isDown(lm,LM.RING_TIP,LM.RING_MCP)&&isDown(lm,LM.PINKY_TIP,LM.PINKY_MCP); },
+};
 const GESTURES = [
-  { id:'open_hand',     label:'السلام',      emoji:'🖐️', detect:isOpenHand     },
-  { id:'three_fingers', label:'ثلاثة أصابع',  emoji:'🤟', detect:isThreeFingers  },
-  { id:'peace',         label:'علامة النصر',  emoji:'✌️', detect:isPeace         },
-  { id:'gun',           label:'إبهام وسبابة', emoji:'🤙', detect:isGun           },
-  { id:'thumb_up',      label:'إبهام لأعلى', emoji:'👍', detect:isThumbUp       },
+  {id:'open_hand',    label:'السلام',      emoji:'🖐️'},
+  {id:'three_fingers',label:'ثلاثة أصابع', emoji:'🤟'},
+  {id:'peace',        label:'علامة النصر', emoji:'✌️'},
+  {id:'gun',          label:'إبهام وسبابة',emoji:'🤙'},
+  {id:'thumb_up',     label:'إبهام لأعلى',emoji:'👍'},
 ];
-
 function recognize(lm) {
-  for (const g of GESTURES) if (g.detect(lm)) return g;
+  for (const g of GESTURES) if (detectors[g.id](lm)) return g;
   return null;
 }
 
-// ── Stability buffers per hand slot ──────────────────────
+// Stability: gesture must hold for N frames straight
 const STABLE_N = 5;
-const stableBuffers = { 0:[], 1:[], live:[] };
-
+const stBufs = {};
 function stabilize(key, raw) {
-  const buf = stableBuffers[key] || (stableBuffers[key] = []);
-  const id  = raw ? raw.id : null;
-  buf.push(id);
-  if (buf.length > STABLE_N) buf.shift();
-  if (buf.length < STABLE_N) return null;
-  return buf.every(x => x === id) ? raw : null;
+  if (!stBufs[key]) stBufs[key] = [];
+  const id = raw ? raw.id : null;
+  stBufs[key].push(id);
+  if (stBufs[key].length > STABLE_N) stBufs[key].shift();
+  if (stBufs[key].length < STABLE_N) return null;
+  return stBufs[key].every(x => x === id) ? raw : null;
 }
 
-// ══════════════════════════════════════════════════════════
-//  DRAWING ENGINE
-// ══════════════════════════════════════════════════════════
-function drawHand(c, cv, lm, gesture, color) {
-  const col = color || (gesture ? GESTURE_COLORS[gesture.id] || '#4ade80' : 'rgba(120,210,255,0.6)');
-  c.lineCap = 'round'; c.lineJoin = 'round'; c.lineWidth = 3; c.strokeStyle = col;
-  for (const [a,b] of HAND_CONNECTIONS) {
-    const p1=lm[a], p2=lm[b];
-    c.beginPath(); c.moveTo(p1.x*cv.width, p1.y*cv.height);
-    c.lineTo(p2.x*cv.width, p2.y*cv.height); c.stroke();
-  }
-  const TIPS = new Set([4,8,12,16,20]);
-  for (let i=0; i<lm.length; i++) {
-    const x=lm[i].x*cv.width, y=lm[i].y*cv.height, tip=TIPS.has(i), r=tip?9:5;
-    if (tip) { c.beginPath(); c.arc(x,y,r+7,0,Math.PI*2); c.fillStyle=col+'30'; c.fill(); }
-    c.beginPath(); c.arc(x,y,r,0,Math.PI*2);
-    c.fillStyle = tip ? col : 'rgba(200,240,255,0.9)'; c.fill();
-    if (tip) { c.beginPath(); c.arc(x-2,y-2,r*.28,0,Math.PI*2); c.fillStyle='rgba(255,255,255,0.8)'; c.fill(); }
-  }
+// ═══════════════════════════════════════════
+//  DRAWING — camera frame + skeleton on ONE canvas
+// ═══════════════════════════════════════════
+const TIPS = new Set([4,8,12,16,20]);
+
+function drawFrame(videoEl, landmarks, handedness) {
+  // Sync canvas size to its displayed size
+  const W = cv.offsetWidth, H = cv.offsetHeight;
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+
+  // 1) Draw mirrored camera frame
+  cx.save();
+  cx.scale(-1, 1);
+  cx.drawImage(videoEl, -W, 0, W, H);
+  cx.restore();
+
+  // 2) Draw skeleton for each hand
+  if (!landmarks) return;
+  landmarks.forEach((lm, idx) => {
+    const gest = recognize(lm);
+    const col  = gest ? (G_COLORS[gest.id]||'#4ade80') : (idx===0 ? '#c084fc' : '#38bdf8');
+
+    // lines
+    cx.strokeStyle = col; cx.lineWidth = 2.8; cx.lineCap = 'round'; cx.lineJoin = 'round';
+    for (const [a,b] of HAND_CONNECTIONS) {
+      cx.beginPath();
+      // landmarks are in 0-1 range; mirror by doing (1 - x)
+      cx.moveTo((1-lm[a].x)*W, lm[a].y*H);
+      cx.lineTo((1-lm[b].x)*W, lm[b].y*H);
+      cx.stroke();
+    }
+    // dots
+    for (let i=0; i<lm.length; i++) {
+      const x=(1-lm[i].x)*W, y=lm[i].y*H;
+      const tip=TIPS.has(i), r=tip?8:4.5;
+      if (tip) {
+        cx.beginPath(); cx.arc(x,y,r+6,0,Math.PI*2);
+        cx.fillStyle=col+'25'; cx.fill();
+      }
+      cx.beginPath(); cx.arc(x,y,r,0,Math.PI*2);
+      cx.fillStyle=tip?col:'rgba(215,240,255,0.9)'; cx.fill();
+      if (tip) {
+        cx.beginPath(); cx.arc(x-1.5,y-1.5,r*.28,0,Math.PI*2);
+        cx.fillStyle='rgba(255,255,255,0.75)'; cx.fill();
+      }
+    }
+  });
 }
 
-function syncCanvas(cv, videoEl) {
-  cv.width  = videoEl.videoWidth  || cv.offsetWidth;
-  cv.height = videoEl.videoHeight || cv.offsetHeight;
-}
-
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════
 //  LIVE TAB
-// ══════════════════════════════════════════════════════════
-let liveLastGesture = null;
-let liveLogCount    = 0;
+// ═══════════════════════════════════════════
+let liveLastId = null, liveLogN = 0;
 
-function initCardColors() {
-  document.querySelectorAll('.gcard').forEach(c => c.style.setProperty('--card-color', c.dataset.color||'#c084fc'));
+function initCards() {
+  document.querySelectorAll('.gc').forEach(c => c.style.setProperty('--card-color', c.dataset.color||'#c084fc'));
 }
-
-function setRing(ratio, color) {
-  ringProgress.style.strokeDashoffset = RING_CIRC*(1-ratio);
-  ringProgress.style.stroke = color;
+function setRing(ratio, col) {
+  ringP.style.strokeDashoffset = RING_C*(1-ratio);
+  ringP.style.stroke = col;
 }
-
-function updateLiveUI(gesture) {
-  if (!gesture) {
-    if (liveLastGesture !== null) {
-      gestureMain.className = '';
-      gestureEmoji.textContent = '✋';
-      gestureLabel.textContent = 'في انتظار';
-      gestureNameEl.textContent = 'الإيماءة';
-      gestureNameEl.style.color = 'var(--muted)';
+function updateLive(g) {
+  if (!g) {
+    if (liveLastId !== null) {
+      gbadge.className=''; gbEmoji.textContent='✋'; gbLabel.textContent='في انتظار';
+      gbName.textContent='الإيماءة'; gbName.style.color='var(--mu)';
       setRing(0,'#334155');
-      document.querySelectorAll('.gcard').forEach(c=>c.classList.remove('active'));
-      gestureStateEl.textContent = '--';
-      liveLastGesture = null;
+      document.querySelectorAll('.gc').forEach(c=>c.classList.remove('active'));
+      gStateEl.textContent='--'; liveLastId=null;
     }
     return;
   }
-  if (gesture.id !== liveLastGesture) {
-    const col = GESTURE_COLORS[gesture.id]||'#c084fc';
-    gestureEmoji.textContent  = gesture.emoji;
-    gestureLabel.textContent  = 'تم التعرف على';
-    gestureNameEl.textContent = gesture.label;
-    gestureNameEl.style.color = col;
-    gestureMain.className     = gesture.id;
-    gestureStateEl.textContent = gesture.label;
-    setRing(1, col);
-    gestureOverlay.classList.remove('pop');
-    void gestureOverlay.offsetWidth;
-    gestureOverlay.classList.add('pop');
-    document.querySelectorAll('.gcard').forEach(c=>c.classList.toggle('active', c.dataset.id===gesture.id));
-    addActivityLog(gesture);
-    liveLastGesture = gesture.id;
+  if (g.id !== liveLastId) {
+    const col=G_COLORS[g.id]||'#c084fc';
+    gbEmoji.textContent=g.emoji; gbLabel.textContent='تم التعرف على';
+    gbName.textContent=g.label; gbName.style.color=col;
+    gbadge.className=g.id; gStateEl.textContent=g.label;
+    setRing(1,col);
+    gbadge.classList.remove('pop'); void gbadge.offsetWidth; gbadge.classList.add('pop');
+    document.querySelectorAll('.gc').forEach(c=>c.classList.toggle('active',c.dataset.id===g.id));
+    // log entry
+    liveLogN++; logBadge.textContent=liveLogN;
+    const t=new Date().toLocaleTimeString('en',{hour12:false});
+    const el=document.createElement('div'); el.className='le';
+    el.innerHTML=`<span>${g.emoji}</span><span>${g.label}</span><span>${t}</span>`;
+    logEl.prepend(el); if(logEl.children.length>25)logEl.removeChild(logEl.lastChild);
+    liveLastId=g.id;
   }
 }
 
-function addActivityLog(g) {
-  liveLogCount++;
-  logCountEl.textContent = liveLogCount;
-  const t = new Date().toLocaleTimeString('en',{hour12:false});
-  const el = document.createElement('div');
-  el.className = 'log-entry';
-  el.innerHTML = `<span class="log-icon">${g.emoji}</span><span class="log-text">${g.label}</span><span class="log-time">${t}</span>`;
-  activityLog.prepend(el);
-  if (activityLog.children.length > 25) activityLog.removeChild(activityLog.lastChild);
-}
-
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════
 //  CHALLENGE TAB
-// ══════════════════════════════════════════════════════════
-let chRunning=false, chLevel=1, chScore=0, chStreak=0, chCombo=1;
-let chSequence=[], chCurrent=0, chTimeLeft=10, chTimerHandle=null;
-let chHoldId=null, chHoldFrames=0;
-const CH_HOLD = 10;
+// ═══════════════════════════════════════════
+let chRun=false,chLvl=1,chScore=0,chStreak=0,chCombo=1;
+let chSeq=[],chCur=0,chTime=10,chTimer=null,chHoldId=null,chHoldF=0;
+const CH_HOLD=10;
 
-function gesturesForLevel(l){ return Math.min(l+1,6); }
-function buildSeq(n){
+function chNumG(l){ return Math.min(l+1,6); }
+function chBuild(n){
   const r=[]; let last=null;
   for(let i=0;i<n;i++){
     let p; do{p=GESTURES[Math.floor(Math.random()*GESTURES.length)]}while(p===last);
@@ -279,520 +262,354 @@ function buildSeq(n){
   }
   return r;
 }
-function renderSeq(){
-  chSequenceEl.innerHTML='';
-  chSequence.forEach((g,i)=>{
+function chRenderSeq(){
+  chSeqEl.innerHTML='';
+  chSeq.forEach((g,i)=>{
     const d=document.createElement('div');
-    d.className='seq-item '+(i<chCurrent?'done':i===chCurrent?'current':'pending');
-    d.textContent=g.emoji; d.title=g.label;
-    chSequenceEl.appendChild(d);
+    d.className='si '+(i<chCur?'done':i===chCur?'cur':'pend');
+    d.textContent=g.emoji; chSeqEl.appendChild(d);
   });
 }
-function showTarget(){
-  const g=chSequence[chCurrent]; if(!g)return;
-  chTargetEmoji.textContent=g.emoji; chTargetName.textContent=g.label;
-  chTargetBox.classList.remove('matched');
+function chShowTgt(){
+  const g=chSeq[chCur]; if(!g)return;
+  chTEmoji.textContent=g.emoji; chTName.textContent=g.label;
+  chTarget.classList.remove('ok');
 }
-function handleChMatch(){
-  chTargetBox.classList.add('matched');
-  chMatchFlash.classList.add('show'); setTimeout(()=>chMatchFlash.classList.remove('show'),200);
-  const earned=(100+Math.floor(chTimeLeft*10))*chCombo;
-  chScore+=earned; chStreak++; chCombo=Math.min(1+Math.floor(chStreak/2),5);
-  chScoreEl.textContent=chScore; chComboEl.textContent=`x${chCombo}`; chStreakEl.textContent=chStreak;
-  showScorePopup(earned);
-  const items=chSequenceEl.querySelectorAll('.seq-item');
-  if(items[chCurrent]) items[chCurrent].className='seq-item done';
-  chCurrent++;
-  if(chCurrent>=chSequence.length){ clearInterval(chTimerHandle); setTimeout(levelComplete,500); }
-  else { resetChTimer(); showTarget(); renderSeq(); }
+function chMatch(){
+  chTarget.classList.add('ok');
+  chFlash.classList.add('on'); setTimeout(()=>chFlash.classList.remove('on'),170);
+  const pts=(100+Math.floor(chTime*10))*chCombo;
+  chScore+=pts; chStreak++; chCombo=Math.min(1+Math.floor(chStreak/2),5);
+  chScoreEl.textContent=chScore; chComboEl.textContent='x'+chCombo; chStreakEl.textContent=chStreak;
+  // popup
+  const rect=chTarget.getBoundingClientRect();
+  const pop=document.createElement('div'); pop.className='spop';
+  pop.textContent='+'+pts; pop.style.left=(rect.left+rect.width/2-20)+'px'; pop.style.top=rect.top+'px';
+  document.body.appendChild(pop); setTimeout(()=>pop.remove(),1200);
+  // advance
+  const items=chSeqEl.querySelectorAll('.si');
+  if(items[chCur])items[chCur].className='si done';
+  chCur++;
+  if(chCur>=chSeq.length){clearInterval(chTimer);setTimeout(chLvlDone,420);}
+  else{chTime=10;chUpdateTimer();chShowTgt();chRenderSeq();}
 }
-function resetChTimer(){ chTimeLeft=10; updateChTimerUI(); }
-function tickChTimer(){
-  if(!chRunning)return;
-  chTimeLeft=Math.max(0,chTimeLeft-1); updateChTimerUI();
-  if(chTimeLeft===0){
-    chStreak=0; chCombo=1; chComboEl.textContent='x1'; chStreakEl.textContent='0';
-    const items=chSequenceEl.querySelectorAll('.seq-item');
-    if(items[chCurrent]){ items[chCurrent].className='seq-item failed'; setTimeout(()=>{ const el=chSequenceEl.querySelectorAll('.seq-item')[chCurrent]; if(el)el.className='seq-item current'; },600); }
-    chTimeLeft=10; updateChTimerUI(); chHoldId=null; chHoldFrames=0;
+function chTick(){
+  if(!chRun)return;
+  chTime=Math.max(0,chTime-1); chUpdateTimer();
+  if(chTime===0){
+    chStreak=0;chCombo=1;chComboEl.textContent='x1';chStreakEl.textContent='0';
+    const items=chSeqEl.querySelectorAll('.si');
+    if(items[chCur]){items[chCur].className='si fail';setTimeout(()=>{const e=chSeqEl.querySelectorAll('.si')[chCur];if(e)e.className='si cur';},500);}
+    chTime=10;chUpdateTimer();chHoldId=null;chHoldF=0;
   }
 }
-function updateChTimerUI(){
-  chTimerBar.style.width=(chTimeLeft/10*100)+'%';
-  chTimerText.textContent=chTimeLeft;
-  chTimerBar.classList.toggle('danger',chTimeLeft<=3);
+function chUpdateTimer(){
+  chTimerBar.style.width=(chTime/10*100)+'%';
+  chTimerNum.textContent=chTime;
+  chTimerBar.classList.toggle('red',chTime<=3);
 }
-function earnStars(n){ chStarsEl.querySelectorAll('.star').forEach((s,i)=>s.classList.toggle('earned',i<n)); }
-function levelComplete(){
-  chRunning=false; clearInterval(chTimerHandle);
-  earnStars(Math.min(5,Math.max(1,Math.ceil(chStreak/1.5))));
-  const row=document.createElement('div'); row.className='ch-hist-row';
-  row.innerHTML=`<span class="ch-hist-level">L${chLevel}</span><span class="ch-hist-result">مكتمل ✓</span><span class="ch-hist-score">${chScore}</span>`;
-  chHistoryEl.prepend(row);
-  chLevel++; chLevelBadge.textContent=chLevel; chRequiredCount.textContent=gesturesForLevel(chLevel);
-  chStartBtn.textContent=`▶ المستوى ${chLevel}`; chStartBtn.disabled=false;
+function chEarnStars(n){ chStarsEl.querySelectorAll('.star').forEach((s,i)=>s.classList.toggle('on',i<n)); }
+function chLvlDone(){
+  chRun=false;clearInterval(chTimer);
+  chEarnStars(Math.min(5,Math.max(1,Math.ceil(chStreak/1.5))));
+  const row=document.createElement('div');row.className='chr';
+  row.innerHTML=`<span class="chl">L${chLvl}</span><span style="flex:1">مكتمل ✓</span><span class="chs">${chScore}</span>`;
+  chHistEl.prepend(row);
+  chLvl++;chLvlBadge.textContent=chLvl;chReqEl.textContent=chNumG(chLvl);
+  chStartBtn.textContent='▶ المستوى '+chLvl;chStartBtn.disabled=false;
 }
-function showScorePopup(pts){
-  const rect=chTargetBox.getBoundingClientRect();
-  const el=document.createElement('div'); el.className='score-popup';
-  el.textContent='+'+pts; el.style.left=rect.left+rect.width/2-25+'px'; el.style.top=rect.top+'px';
-  document.body.appendChild(el); setTimeout(()=>el.remove(),1300);
+function chDoStart(){
+  chSeq=chBuild(chNumG(chLvl));chCur=0;chHoldId=null;chHoldF=0;
+  chReqEl.textContent=chSeq.length;chLvlBadge.textContent=chLvl;
+  chStartBtn.disabled=true;chStartBtn.textContent='⏳ جاري...';
+  chEarnStars(0);chRenderSeq();chShowTgt();chTime=10;chUpdateTimer();
+  showCd(camBox,()=>{chRun=true;clearInterval(chTimer);chTimer=setInterval(chTick,1000);});
 }
-function showCountdown(wrap,cb){
-  const ov=document.createElement('div'); ov.id='countdown-overlay';
-  const ne=document.createElement('div'); ne.id='countdown-num'; ov.appendChild(ne); wrap.appendChild(ov);
+function chDoReset(){
+  clearInterval(chTimer);chRun=false;chLvl=1;chScore=0;chStreak=0;chCombo=1;
+  chSeq=[];chCur=0;chHoldId=null;chHoldF=0;
+  chScoreEl.textContent='0';chComboEl.textContent='x1';chStreakEl.textContent='0';
+  chLvlBadge.textContent='1';chReqEl.textContent='2';
+  chStartBtn.textContent='▶ ابدأ التحدي';chStartBtn.disabled=false;
+  chTimerBar.style.width='100%';chTimerNum.textContent='10';chTimerBar.classList.remove('red');
+  chTEmoji.textContent='🎯';chTName.textContent='اضغط ابدأ';
+  chSeqEl.innerHTML='';chHistEl.innerHTML='';chEarnStars(0);
+}
+chStartBtn.addEventListener('click',chDoStart);
+chResetBtn.addEventListener('click',chDoReset);
+
+// countdown helper
+function showCd(wrap,cb){
+  const ov=document.createElement('div');ov.className='cd-ov';
+  const nd=document.createElement('div');nd.className='cdn';
+  const sd=document.createElement('div');sd.className='cds';
+  ov.appendChild(nd);ov.appendChild(sd);wrap.appendChild(ov);
   let n=3;
   function tick(){
-    ne.textContent=n===0?'GO!':n;
-    ne.style.animation='none'; void ne.offsetWidth; ne.style.animation='countPop .7s cubic-bezier(.34,1.56,.64,1) forwards';
-    n--; if(n<0){setTimeout(()=>{ov.remove();cb();},700);}else{setTimeout(tick,900);}
-  }
-  tick();
-}
-function startChallenge(){
-  chSequence=buildSeq(gesturesForLevel(chLevel)); chCurrent=0; chHoldId=null; chHoldFrames=0;
-  chRequiredCount.textContent=chSequence.length; chLevelBadge.textContent=chLevel;
-  chStartBtn.disabled=true; chStartBtn.textContent='⏳ جاري التحدي...';
-  earnStars(0); renderSeq(); showTarget(); resetChTimer();
-  showCountdown(chViewportWrap,()=>{ chRunning=true; clearInterval(chTimerHandle); chTimerHandle=setInterval(tickChTimer,1000); });
-}
-function fullResetChallenge(){
-  clearInterval(chTimerHandle); chRunning=false; chLevel=1; chScore=0; chStreak=0; chCombo=1; chSequence=[]; chCurrent=0; chHoldId=null; chHoldFrames=0;
-  chScoreEl.textContent='0'; chComboEl.textContent='x1'; chStreakEl.textContent='0';
-  chLevelBadge.textContent='1'; chRequiredCount.textContent='2';
-  chStartBtn.textContent='▶ ابدأ التحدي'; chStartBtn.disabled=false;
-  chTimerBar.style.width='100%'; chTimerText.textContent='10'; chTimerBar.classList.remove('danger');
-  chTargetEmoji.textContent='🎯'; chTargetName.textContent='اضغط ابدأ';
-  chSequenceEl.innerHTML=''; chHistoryEl.innerHTML=''; earnStars(0);
-}
-chStartBtn.addEventListener('click',startChallenge);
-chResetBtn.addEventListener('click',fullResetChallenge);
-
-// ══════════════════════════════════════════════════════════
-//  POWERS TAB
-//  States: idle → countdown → recording → idle
-//          idle → playing
-// ══════════════════════════════════════════════════════════
-const MAX_REC = 20;
-let pwState        = 'idle';  // 'idle' | 'countdown' | 'recording' | 'playing'
-let pwRecorded     = [];      // array of gesture objects recorded so far
-let pwSaved        = [];      // array of {name, gestures:[]} saved sequences
-let pwSelectedSave = -1;      // index into pwSaved for playback
-let pwPlayIndex    = 0;       // current step in playback
-let pwPlayHoldId   = null;
-let pwPlayHoldF    = 0;
-let pwRecHoldId    = null;
-let pwRecHoldF     = 0;
-const PW_HOLD      = 12;      // frames to hold before capturing / accepting
-let pwMode         = 'record';// 'record' | 'playback'
-let pwRecIndicator = null;    // DOM element shown while recording
-let pwPlayResults  = [];      // per-step result: true/false
-
-// ── Recording countdown then record ──────────────────────
-function pwStartCountdown() {
-  if (pwState !== 'idle') return;
-  pwState = 'countdown';
-  pwRecStartBtn.disabled = true;
-  // Show countdown overlay
-  pwRecOverlay.classList.remove('hidden');
-  let n = 3;
-  function tick() {
-    pwRecCount.textContent  = n;
-    pwRecLabelEl.textContent = n > 0 ? 'استعد...' : 'سجّل!';
-    pwRecCount.style.animation = 'none'; void pwRecCount.offsetWidth;
-    pwRecCount.style.animation = 'countPop .6s cubic-bezier(.34,1.56,.64,1) forwards';
+    nd.textContent=n===0?'GO!':n;sd.textContent=n===0?'':'استعد...';
+    nd.style.animation='none';void nd.offsetWidth;nd.style.animation='cpop .62s cubic-bezier(.34,1.56,.64,1) forwards';
     n--;
-    if (n < 0) { pwRecOverlay.classList.add('hidden'); pwBeginRecording(); }
-    else       { setTimeout(tick, 900); }
+    if(n<0)setTimeout(()=>{ov.remove();cb();},620);
+    else setTimeout(tick,880);
   }
   tick();
 }
 
-function pwBeginRecording() {
-  pwState       = 'recording';
-  pwRecHoldId   = null;
-  pwRecHoldF    = 0;
-  // Show red REC indicator on viewport
-  if (!pwRecIndicator) {
-    pwRecIndicator = document.createElement('div');
-    pwRecIndicator.className = 'rec-indicator';
-    pwRecIndicator.innerHTML = '<div class="rec-dot"></div><div class="rec-text">REC</div>';
-    pwViewportWrap.appendChild(pwRecIndicator);
+// ═══════════════════════════════════════════
+//  POWERS TAB
+// ═══════════════════════════════════════════
+const MAX_REC=20, PW_HOLD=12;
+let pwState='idle';
+let pwRecorded=[], pwSaved=[], pwSelIdx=-1;
+let pwPlayIdx=0, pwPlayResults=[];
+let pwHoldId=null, pwHoldF=0;
+let pwMode='rec';
+
+// recording
+function pwStartCd(){
+  if(pwState!=='idle')return;
+  pwState='countdown';pwBtnStart.disabled=true;
+  pwCd.classList.remove('hidden');
+  let n=3;
+  function tick(){
+    pwCdN.textContent=n;pwCdS.textContent=n>0?'استعد...':'سجّل!';
+    pwCdN.style.animation='none';void pwCdN.offsetWidth;pwCdN.style.animation='cpop .6s cubic-bezier(.34,1.56,.64,1) forwards';
+    n--;
+    if(n<0){pwCd.classList.add('hidden');pwBeginRec();}
+    else setTimeout(tick,900);
   }
-  pwRecBarWrap.classList.remove('hidden');
-  pwRecStopBtn.disabled = false;
-  updatePwRecBar();
+  tick();
 }
-
-function pwStopRecording() {
-  if (pwState !== 'recording') return;
-  pwState = 'idle';
-  if (pwRecIndicator) { pwRecIndicator.remove(); pwRecIndicator = null; }
-  pwRecBarWrap.classList.add('hidden');
-  pwRecStartBtn.disabled = false;
-  pwRecStopBtn.disabled  = true;
-  pwRecSaveBtn.disabled  = pwRecorded.length === 0;
+function pwBeginRec(){
+  pwState='recording';pwHoldId=null;pwHoldF=0;
+  pwRecInd.classList.remove('hidden');pwBarWrap.classList.remove('hidden');
+  pwBtnStop.disabled=false;pwUpdateBar();
 }
-
-function pwCaptureGesture(gesture) {
-  if (pwRecorded.length >= MAX_REC) { pwStopRecording(); return; }
-  pwRecorded.push(gesture);
-  // Add chip to preview
-  const chip = document.createElement('div');
-  chip.className   = 'pw-rec-chip';
-  chip.textContent = gesture.emoji;
-  chip.title       = gesture.label;
-  pwRecPreview.appendChild(chip);
-  updatePwRecBar();
-  if (pwRecorded.length >= MAX_REC) pwStopRecording();
+function pwStopRec(){
+  if(pwState!=='recording')return;
+  pwState='idle';pwRecInd.classList.add('hidden');pwBarWrap.classList.add('hidden');
+  pwBtnStart.disabled=false;pwBtnStop.disabled=true;
+  pwBtnSave.disabled=pwRecorded.length===0;
 }
-
-function updatePwRecBar() {
-  const pct = (pwRecorded.length / MAX_REC) * 100;
-  pwRecBarFill.style.width     = pct + '%';
-  pwRecBarLabel.textContent    = `تسجيل ${pwRecorded.length} / ${MAX_REC}`;
-  document.getElementById('pw-rec-count-badge').textContent = `${pwRecorded.length}/20`;
+function pwCapture(g){
+  if(pwRecorded.length>=MAX_REC){pwStopRec();return;}
+  pwRecorded.push(g);
+  const c=document.createElement('div');c.className='pwc';c.textContent=g.emoji;c.title=g.label;
+  pwPreview.appendChild(c);pwUpdateBar();
+  if(pwRecorded.length>=MAX_REC)pwStopRec();
 }
-
-function pwClearRecording() {
-  pwRecorded     = [];
-  pwRecPreview.innerHTML = '';
-  pwRecSaveBtn.disabled  = true;
-  updatePwRecBar();
+function pwUpdateBar(){
+  pwBarFill.style.width=(pwRecorded.length/MAX_REC*100)+'%';
+  pwBarLbl.textContent=pwRecorded.length+'/20';
+  pwBadge.textContent=pwRecorded.length+'/20';
 }
-
-function pwSaveSequence() {
-  const name = pwSeqName.value.trim() || `تسلسل ${pwSaved.length + 1}`;
-  if (pwRecorded.length === 0) return;
-  pwSaved.push({ name, gestures: [...pwRecorded] });
-  pwSeqName.value = '';
-  pwClearRecording();
-  renderSavedList();
+function pwClear(){
+  pwRecorded=[];pwPreview.innerHTML='';pwBtnSave.disabled=true;pwUpdateBar();
 }
+function pwSave(){
+  if(!pwRecorded.length)return;
+  const name=pwNameInput.value.trim()||('تسلسل '+(pwSaved.length+1));
+  pwSaved.push({name,gestures:[...pwRecorded]});
+  pwNameInput.value='';pwClear();pwRenderSaved();
+}
+pwBtnStart.addEventListener('click',pwStartCd);
+pwBtnStop.addEventListener('click',pwStopRec);
+pwBtnClear.addEventListener('click',pwClear);
+pwBtnSave.addEventListener('click',pwSave);
 
-function renderSavedList() {
-  pwSavedList.innerHTML = '';
-  pwSavedCount.textContent = pwSaved.length;
-  pwSaved.forEach((seq, i) => {
-    const card = document.createElement('div');
-    card.className = 'pw-saved-card' + (i === pwSelectedSave ? ' selected' : '');
-    const emojis = seq.gestures.map(g=>g.emoji).join(' ');
-    card.innerHTML = `
-      <div style="flex:1;min-width:0">
-        <div class="pw-saved-name">${seq.name}</div>
-        <div class="pw-saved-emojis">${emojis}</div>
-      </div>
-      <div class="pw-saved-count">${seq.gestures.length} حركة</div>
-      <button class="pw-saved-del" data-i="${i}" title="حذف">🗑</button>
-    `;
-    card.addEventListener('click', (e) => {
-      if (e.target.classList.contains('pw-saved-del')) return;
-      pwSelectedSave = i;
-      renderSavedList();
-      pwResultBox.classList.add('hidden');
+// saved list
+function pwRenderSaved(){
+  pwSavedList.innerHTML='';pwSavedCount.textContent=pwSaved.length;
+  pwBtnPlay.disabled=pwSelIdx<0||pwSelIdx>=pwSaved.length;
+  pwSaved.forEach((s,i)=>{
+    const card=document.createElement('div');card.className='pwcard'+(i===pwSelIdx?' sel':'');
+    card.innerHTML=`<div style="flex:1;min-width:0"><div class="pwcn">${s.name}</div><div class="pwce">${s.gestures.map(g=>g.emoji).join(' ')}</div></div><div class="pwcc">${s.gestures.length} حركة</div><button class="pwdel" data-i="${i}">🗑</button>`;
+    card.addEventListener('click',e=>{
+      if(e.target.classList.contains('pwdel'))return;
+      pwSelIdx=i;pwRenderSaved();pwResult.classList.add('hidden');
     });
-    card.querySelector('.pw-saved-del').addEventListener('click', () => {
-      pwSaved.splice(i, 1);
-      if (pwSelectedSave >= pwSaved.length) pwSelectedSave = pwSaved.length - 1;
-      renderSavedList();
+    card.querySelector('.pwdel').addEventListener('click',()=>{
+      pwSaved.splice(i,1);if(pwSelIdx>=pwSaved.length)pwSelIdx=pwSaved.length-1;pwRenderSaved();
     });
     pwSavedList.appendChild(card);
   });
-  // Playback button
-  let playBtn = document.getElementById('pw-play-now-btn');
-  if (!playBtn) {
-    playBtn = document.createElement('button');
-    playBtn.id        = 'pw-play-now-btn';
-    playBtn.className = 'ch-btn primary';
-    playBtn.textContent = '▶ ابدأ الاختبار';
-    playBtn.addEventListener('click', pwStartPlayback);
-    pwPlaybackSection.appendChild(playBtn);
-  }
 }
 
-// ── Playback ──────────────────────────────────────────────
-function pwStartPlayback() {
-  if (pwSelectedSave < 0 || pwSelectedSave >= pwSaved.length) return;
-  if (pwState !== 'idle') return;
-  const seq = pwSaved[pwSelectedSave];
-  pwPlayIndex   = 0;
-  pwPlayHoldId  = null;
-  pwPlayHoldF   = 0;
-  pwPlayResults = [];
-  pwState       = 'playing';
-  pwResultBox.classList.add('hidden');
-  pwShowPlayStep();
+// playback
+function pwStartPlay(){
+  if(pwSelIdx<0||pwSelIdx>=pwSaved.length||pwState!=='idle')return;
+  pwPlayIdx=0;pwHoldId=null;pwHoldF=0;pwPlayResults=[];
+  pwState='playing';pwResult.classList.add('hidden');
+  pwShowStep();
 }
-
-function pwShowPlayStep() {
-  const seq = pwSaved[pwSelectedSave];
-  if (!seq || pwPlayIndex >= seq.gestures.length) { pwFinishPlayback(); return; }
-  const g = seq.gestures[pwPlayIndex];
-  pwPlayStep.textContent = g.emoji;
-  pwPlayInfo.textContent = g.label;
-  pwPlayOverlay.classList.remove('hidden');
+function pwShowStep(){
+  const seq=pwSaved[pwSelIdx];
+  if(!seq||pwPlayIdx>=seq.gestures.length){pwFinish();return;}
+  const g=seq.gestures[pwPlayIdx];
+  pwPe.textContent=g.emoji;pwPn.textContent=g.label;
+  pwProg.style.width='0%';pwPlayOv.classList.remove('hidden');
 }
-
-function pwFinishPlayback() {
-  pwState = 'idle';
-  pwPlayOverlay.classList.add('hidden');
-  // Show results
-  const correct = pwPlayResults.filter(Boolean).length;
-  const total   = pwPlayResults.length;
-  const errors  = total - correct;
-  const acc     = total > 0 ? Math.round(correct/total*100) : 0;
-  pwResCorrect.textContent  = correct;
-  pwResErrors.textContent   = errors;
-  pwResAccuracy.textContent = acc + '%';
-  // Step chips
-  const seq = pwSaved[pwSelectedSave];
-  pwResultSteps.innerHTML = '';
-  pwPlayResults.forEach((ok, i) => {
-    const chip = document.createElement('div');
-    chip.className   = 'pw-step-chip ' + (ok ? 'ok' : 'err');
-    chip.textContent = (seq.gestures[i]?.emoji||'?') + (ok?' ✓':' ✗');
-    pwResultSteps.appendChild(chip);
+function pwFinish(){
+  pwState='idle';pwPlayOv.classList.add('hidden');
+  const ok=pwPlayResults.filter(Boolean).length,total=pwPlayResults.length,err=total-ok;
+  pwOk.textContent=ok;pwErr.textContent=err;pwAcc.textContent=(total?Math.round(ok/total*100):0)+'%';
+  const seq=pwSaved[pwSelIdx];pwSteps.innerHTML='';
+  pwPlayResults.forEach((good,i)=>{
+    const chip=document.createElement('div');chip.className='pstep '+(good?'ok':'err');
+    chip.textContent=(seq.gestures[i]?.emoji||'?')+(good?' ✓':' ✗');pwSteps.appendChild(chip);
   });
-  pwResultBox.classList.remove('hidden');
+  pwResult.classList.remove('hidden');
 }
+pwBtnPlay.addEventListener('click',pwStartPlay);
 
-// ── Powers mode switch ────────────────────────────────────
-document.querySelectorAll('.pw-mode-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    pwMode = btn.dataset.mode;
-    document.querySelectorAll('.pw-mode-btn').forEach(b=>b.classList.toggle('active',b===btn));
-    pwRecordSection.classList.toggle('hidden',   pwMode !== 'record');
-    pwPlaybackSection.classList.toggle('hidden', pwMode !== 'playback');
-    if (pwMode === 'playback') renderSavedList();
+// mode switch
+document.querySelectorAll('.ptab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    pwMode=btn.dataset.m;
+    document.querySelectorAll('.ptab').forEach(b=>b.classList.toggle('active',b===btn));
+    pwRecSec.classList.toggle('hidden',pwMode!=='rec');
+    pwPlaySec.classList.toggle('hidden',pwMode!=='play');
+    if(pwMode==='play')pwRenderSaved();
   });
 });
 
-// ── Powers controls ───────────────────────────────────────
-pwRecStartBtn.addEventListener('click', pwStartCountdown);
-pwRecStopBtn.addEventListener('click',  pwStopRecording);
-pwRecClearBtn.addEventListener('click', pwClearRecording);
-pwRecSaveBtn.addEventListener('click',  pwSaveSequence);
-
-// ── Powers hand chip update ───────────────────────────────
-function updateHandChips(handednessList, gesturesByHand) {
-  const labels = { Right: pwRightChip, Left: pwLeftChip };
-  // Reset
-  Object.values(labels).forEach(el => { el.textContent='--'; el.classList.remove('active'); });
-  if (!handednessList) return;
-  handednessList.forEach((h, i) => {
-    const label = h.label; // 'Right' or 'Left'
-    const chip  = labels[label];
-    if (!chip) return;
-    const g = gesturesByHand[i];
-    chip.textContent = g ? g.emoji + ' ' + g.label : '👐 مكتشف';
-    chip.classList.add('active');
-  });
-}
-
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════
 //  MEDIAPIPE RESULT HANDLER
-//  Single handler, routes by activeTab
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════
 function onResults(results) {
-  // FPS counter
-  fpsFrames++;
-  const now = performance.now();
-  if (now - lastFpsTime >= 1000) {
-    fpsCounter.textContent = fpsFrames + ' FPS';
-    fpsFrames = 0; lastFpsTime = now;
-  }
+  // FPS
+  fpsF++;
+  const now=performance.now();
+  if(now-lastFpsT>=1000){fpsEl.textContent=fpsF+' FPS';fpsF=0;lastFpsT=now;}
 
-  const hands       = results.multiHandLandmarks   || [];
-  const handedness  = results.multiHandedness       || [];
+  const hands    = results.multiHandLandmarks||[];
+  const handness = results.multiHandedness   ||[];
+
+  // Draw camera + skeleton (always, regardless of tab)
+  drawFrame(vid, hands, handness);
 
   // ── LIVE ──
-  if (activeTab === 'live') {
-    syncCanvas(canvasLive, videoEl);
-    ctxLive.clearRect(0,0,canvasLive.width,canvasLive.height);
-    if (handCount) handCount.textContent = hands.length;
-    if (lmCount)   lmCount.textContent   = hands.length ? `${hands[0].length}/21` : '--/21';
-    if (!hands.length) { stableBuffers.live=[]; updateLiveUI(null); return; }
-    const lm  = hands[0];
-    const raw = recognize(lm);
-    const st  = stabilize('live', raw);
-    drawHand(ctxLive, canvasLive, lm, st);
-    updateLiveUI(st);
+  if(activeTab==='live'){
+    handCountEl.textContent=hands.length;
+    lmCountEl.textContent=hands.length?hands[0].length+'/21':'--';
+    if(!hands.length){stBufs.live=[];updateLive(null);return;}
+    const st=stabilize('live',recognize(hands[0]));
+    updateLive(st);
     return;
   }
 
   // ── CHALLENGE ──
-  if (activeTab === 'challenge') {
-    syncCanvas(canvasChallenge, videoEl);
-    ctxChallenge.clearRect(0,0,canvasChallenge.width,canvasChallenge.height);
-    if (!hands.length) {
-      chDetectedEmoji.textContent='✋'; chDetectedName.textContent='--';
-      chHoldId=null; chHoldFrames=0; return;
+  if(activeTab==='challenge'){
+    if(!hands.length){chDEmoji.textContent='✋';chDName.textContent='--';chHoldId=null;chHoldF=0;return;}
+    const raw=recognize(hands[0]);
+    chDEmoji.textContent=raw?raw.emoji:'✋';chDName.textContent=raw?raw.label:'--';
+    if(chRun&&chSeq[chCur]){
+      const tgt=chSeq[chCur];
+      if(raw&&raw.id===tgt.id){
+        if(chHoldId===raw.id)chHoldF++;else{chHoldId=raw.id;chHoldF=1;}
+        if(chHoldF>=CH_HOLD){chHoldId=null;chHoldF=0;chMatch();}
+      }else{chHoldId=null;chHoldF=0;chTarget.classList.remove('ok');}
     }
-    const lm  = hands[0];
-    const raw = recognize(lm);
-    if (raw) { chDetectedEmoji.textContent=raw.emoji; chDetectedName.textContent=raw.label; }
-    else     { chDetectedEmoji.textContent='✋'; chDetectedName.textContent='--'; }
-    // Hold-to-confirm
-    if (chRunning && chSequence[chCurrent]) {
-      const target = chSequence[chCurrent];
-      if (raw && raw.id === target.id) {
-        if (chHoldId === raw.id) chHoldFrames++; else { chHoldId=raw.id; chHoldFrames=1; }
-        if (chHoldFrames >= CH_HOLD) { chHoldId=null; chHoldFrames=0; handleChMatch(); }
-      } else { chHoldId=null; chHoldFrames=0; chTargetBox.classList.remove('matched'); }
-    }
-    const tgt   = chRunning && chSequence[chCurrent] ? chSequence[chCurrent] : null;
-    const match = raw && tgt && raw.id === tgt.id;
-    drawHand(ctxChallenge, canvasChallenge, lm, match ? raw : null);
     return;
   }
 
   // ── POWERS ──
-  if (activeTab === 'powers') {
-    syncCanvas(canvasPowers, videoEl);
-    ctxPowers.clearRect(0,0,canvasPowers.width,canvasPowers.height);
-
-    // Detect gestures for each hand
-    const gesturesByHand = hands.map((lm, i) => {
-      const raw = recognize(lm);
-      return stabilize(i, raw);
+  if(activeTab==='powers'){
+    // Update hand chips
+    [pwRight,pwLeft].forEach(el=>{el.textContent='--';el.classList.remove('on');});
+    handness.forEach((h,i)=>{
+      const el=h.label==='Right'?pwRight:pwLeft;
+      const g=stabilize(i,recognize(hands[i]));
+      el.textContent=g?g.emoji+' '+g.label:'🤚 مكتشف';el.classList.add('on');
     });
 
-    // Update hand chips (uses raw handedness labels)
-    updateHandChips(handedness.length ? handedness : null, gesturesByHand);
-
-    // Draw each hand with distinct color
-    const handColors = ['#c084fc', '#38bdf8'];
-    hands.forEach((lm, i) => {
-      drawHand(ctxPowers, canvasPowers, lm, gesturesByHand[i], gesturesByHand[i] ? GESTURE_COLORS[gesturesByHand[i].id] : handColors[i % 2]);
-    });
-
-    // ── RECORDING: capture when gesture holds ──
-    if (pwState === 'recording' && hands.length > 0) {
-      const g = gesturesByHand[0]; // record first hand only
-      if (g) {
-        if (pwRecHoldId === g.id) { pwRecHoldF++; }
-        else                      { pwRecHoldId = g.id; pwRecHoldF = 1; }
-        if (pwRecHoldF >= PW_HOLD) {
-          pwRecHoldF = 0;
-          // Only capture if different from last recorded
-          if (pwRecorded.length === 0 || pwRecorded[pwRecorded.length-1].id !== g.id) {
-            pwCaptureGesture(g);
-          }
+    // Recording (first hand)
+    if(pwState==='recording'&&hands.length>0){
+      const g=stabilize('pw0',recognize(hands[0]));
+      if(g){
+        if(pwHoldId===g.id)pwHoldF++;else{pwHoldId=g.id;pwHoldF=1;}
+        if(pwHoldF>=PW_HOLD){
+          pwHoldF=0;
+          if(!pwRecorded.length||pwRecorded[pwRecorded.length-1].id!==g.id)pwCapture(g);
         }
-      } else {
-        pwRecHoldId = null; pwRecHoldF = 0;
-      }
+      }else{pwHoldId=null;pwHoldF=0;}
     }
 
-    // ── PLAYBACK: check if user does the right gesture ──
-    if (pwState === 'playing') {
-      const seq = pwSaved[pwSelectedSave];
-      if (!seq || pwPlayIndex >= seq.gestures.length) { pwFinishPlayback(); return; }
-      const target = seq.gestures[pwPlayIndex];
-      const g = gesturesByHand[0];
-      if (g) {
-        if (pwPlayHoldId === g.id) { pwPlayHoldF++; }
-        else                       { pwPlayHoldId = g.id; pwPlayHoldF = 1; }
-        if (pwPlayHoldF >= PW_HOLD) {
-          pwPlayHoldId = null; pwPlayHoldF = 0;
-          const correct = g.id === target.id;
-          pwPlayResults.push(correct);
-          // Flash feedback on overlay
-          pwPlayOverlay.style.background = correct
-            ? 'rgba(74,222,128,0.15)' : 'rgba(239,68,68,0.15)';
-          setTimeout(() => pwPlayOverlay.style.background = '', 300);
-          pwPlayIndex++;
-          if (pwPlayIndex >= seq.gestures.length) { setTimeout(pwFinishPlayback, 400); }
-          else { pwShowPlayStep(); }
+    // Playback (first hand)
+    if(pwState==='playing'){
+      const seq=pwSaved[pwSelIdx];
+      if(!seq||pwPlayIdx>=seq.gestures.length){pwFinish();return;}
+      const tgt=seq.gestures[pwPlayIdx];
+      const g=hands.length?stabilize('pw0',recognize(hands[0])):null;
+      if(g){
+        if(pwHoldId===g.id)pwHoldF++;else{pwHoldId=g.id;pwHoldF=1;}
+        pwProg.style.width=Math.min(100,pwHoldF/PW_HOLD*100)+'%';
+        if(pwHoldF>=PW_HOLD){
+          pwHoldId=null;pwHoldF=0;
+          const ok=g.id===tgt.id;
+          pwPlayResults.push(ok);
+          pwPlayOv.style.background=ok?'rgba(74,222,128,0.16)':'rgba(239,68,68,0.16)';
+          setTimeout(()=>pwPlayOv.style.background='',320);
+          pwPlayIdx++;
+          if(pwPlayIdx>=seq.gestures.length)setTimeout(pwFinish,420);
+          else pwShowStep();
         }
-      } else {
-        pwPlayHoldId = null; pwPlayHoldF = 0;
-      }
+      }else{pwHoldF=0;pwProg.style.width='0%';}
     }
   }
 }
 
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════
 //  TAB SWITCHING
-// ══════════════════════════════════════════════════════════
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    activeTab = btn.dataset.tab;
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b===btn));
-    document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.toggle('active', tc.id==='tab-'+activeTab));
-    // Reset buffers
-    Object.keys(stableBuffers).forEach(k => stableBuffers[k]=[]);
-    liveLastGesture = null;
-    // Stop any power state
-    if (activeTab !== 'powers' && pwState !== 'idle') {
-      pwStopRecording();
-      pwState = 'idle';
-      pwPlayOverlay.classList.add('hidden');
+// ═══════════════════════════════════════════
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    activeTab=btn.dataset.tab;
+    document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b===btn));
+    // panels
+    document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+activeTab));
+    // overlays on cam
+    document.querySelectorAll('.tab-ov').forEach(o=>o.classList.toggle('active',o.id==='ov-'+activeTab));
+    // clear buffers
+    Object.keys(stBufs).forEach(k=>stBufs[k]=[]);
+    liveLastId=null;
+    // stop power activities if leaving powers
+    if(activeTab!=='powers'){
+      if(pwState==='recording')pwStopRec();
+      if(pwState==='playing'){pwState='idle';pwPlayOv.classList.add('hidden');}
     }
   });
 });
 
-// ══════════════════════════════════════════════════════════
-//  MEDIAPIPE INIT — single camera + single Hands instance
-// ══════════════════════════════════════════════════════════
-function initMediaPipe() {
-  const hands = new Hands({
-    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
+// ═══════════════════════════════════════════
+//  INIT — single Camera, single Hands
+// ═══════════════════════════════════════════
+function init(){
+  const hands=new Hands({
+    locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
   });
   hands.setOptions({
-    maxNumHands:            2,      // 2 for powers tab
-    modelComplexity:        1,
-    minDetectionConfidence: 0.65,
-    minTrackingConfidence:  0.55,
+    maxNumHands:2,
+    modelComplexity:1,
+    minDetectionConfidence:0.65,
+    minTrackingConfidence:0.55,
   });
   hands.onResults(onResults);
 
-  const camera = new Camera(videoEl, {
-    onFrame: async () => { await hands.send({ image: videoEl }); },
-    width: 1280, height: 720,
+  const camera=new Camera(vid,{
+    onFrame:async()=>{ await hands.send({image:vid}); },
+    width:1280, height:720,
   });
-
-  camera.start().then(() => {
-    statusDot.classList.add('active');
-    statusText.textContent = 'النظام يعمل ✓';
-    // Push live video stream to all canvases via drawImage for background
-    function drawBg() {
-      const tabs = [
-        { active:'live',      cv:canvasLive,      c:ctxLive      },
-        { active:'challenge', cv:canvasChallenge, c:ctxChallenge },
-        { active:'powers',    cv:canvasPowers,    c:ctxPowers    },
-      ];
-      tabs.forEach(t => {
-        if (activeTab !== t.active) return;
-        const cv = t.cv, c = t.c;
-        if (cv.width && cv.height && videoEl.readyState >= 2) {
-          // draw mirrored background
-          c.save();
-          c.scale(-1,1);
-          c.drawImage(videoEl, -cv.width, 0, cv.width, cv.height);
-          c.restore();
-        }
-      });
-      requestAnimationFrame(drawBg);
-    }
-    drawBg();
-  }).catch(err => {
-    statusText.textContent = 'خطأ: ' + err.message;
+  camera.start().then(()=>{
+    statusDot.classList.add('on');
+    statusText.textContent='النظام يعمل ✓';
+  }).catch(err=>{
+    statusText.textContent='خطأ: '+err.message;
     console.error(err);
   });
 }
 
-// ══════════════════════════════════════════════════════════
-//  CLOCK
-// ══════════════════════════════════════════════════════════
-setInterval(() => {
-  clockDisplay.textContent = new Date().toLocaleTimeString('en',{hour12:false});
-}, 1000);
+// clock
+setInterval(()=>{ clockEl.textContent=new Date().toLocaleTimeString('en',{hour12:false}); },1000);
 
-// ══════════════════════════════════════════════════════════
-//  ENTRY POINT
-// ══════════════════════════════════════════════════════════
-window.addEventListener('load', () => {
-  initCardColors();
-  initMediaPipe();
-});
+window.addEventListener('load',()=>{ initCards(); init(); });
