@@ -13,7 +13,6 @@
 </head>
 <body>
 
-<!-- Background -->
 <div id="bg-layer">
   <div class="bg-orb orb-1"></div>
   <div class="bg-orb orb-2"></div>
@@ -24,7 +23,7 @@
 
 <div id="app">
 
-  <!-- HEADER -->
+  <!-- ══ HEADER ══ -->
   <header id="header">
     <div id="brand">
       <div id="brand-icon">
@@ -41,11 +40,10 @@
       </div>
       <div id="brand-text">
         <span id="brand-name">NEURO<em>HAND</em></span>
-        <span id="brand-sub">Gesture Intelligence System v2.1</span>
+        <span id="brand-sub">Gesture Intelligence System v2.3</span>
       </div>
     </div>
 
-    <!-- NAV TABS -->
     <nav id="nav-tabs">
       <button class="tab-btn active" data-tab="live">🎯 مباشر</button>
       <button class="tab-btn" data-tab="challenge">⚡ تحديات</button>
@@ -58,8 +56,14 @@
     </div>
   </header>
 
-  <!-- MAIN -->
+  <!-- ══ MAIN ══ -->
   <main id="main">
+
+    <!--
+      ONE video element — hidden here, both tabs draw on their own canvas.
+      The video feeds the single MediaPipe instance.
+    -->
+    <video id="video" autoplay playsinline muted style="display:none"></video>
 
     <!-- ══════════ TAB: LIVE ══════════ -->
     <div id="tab-live" class="tab-content active">
@@ -68,7 +72,9 @@
         <div class="corner tl"></div><div class="corner tr"></div>
         <div class="corner bl"></div><div class="corner br"></div>
         <div id="scan-line"></div>
-        <video id="video" autoplay playsinline muted></video>
+
+        <!-- Mirror video visually for live tab -->
+        <video id="video-live-mirror" autoplay playsinline muted></video>
         <canvas id="canvas"></canvas>
 
         <!-- Gesture badge -->
@@ -99,15 +105,14 @@
         </div>
       </div>
 
-      <!-- Side panel -->
       <aside id="side-panel">
         <div class="panel-section-title"><span>مكتبة الإيماءات</span><div class="panel-badge">5</div></div>
         <div id="gesture-cards">
-          <div class="gcard" data-id="thumb_up"      data-color="#4ade80"><div class="gcard-icon">👍</div><div class="gcard-body"><div class="gcard-name">إبهام لأعلى</div><div class="gcard-desc">الإبهام فقط مرفوع</div><div class="gcard-bar"><div class="gcard-bar-fill"></div></div></div><div class="gcard-dot"></div></div>
-          <div class="gcard" data-id="peace"         data-color="#38bdf8"><div class="gcard-icon">✌️</div><div class="gcard-body"><div class="gcard-name">علامة النصر</div><div class="gcard-desc">السبابة والوسطى فقط</div><div class="gcard-bar"><div class="gcard-bar-fill"></div></div></div><div class="gcard-dot"></div></div>
           <div class="gcard" data-id="open_hand"     data-color="#fb923c"><div class="gcard-icon">🖐️</div><div class="gcard-body"><div class="gcard-name">السلام</div><div class="gcard-desc">جميع الأصابع مفتوحة</div><div class="gcard-bar"><div class="gcard-bar-fill"></div></div></div><div class="gcard-dot"></div></div>
-          <div class="gcard" data-id="gun"           data-color="#f472b6"><div class="gcard-icon">🤙</div><div class="gcard-body"><div class="gcard-name">إبهام وسبابة</div><div class="gcard-desc">شكل حرف L</div><div class="gcard-bar"><div class="gcard-bar-fill"></div></div></div><div class="gcard-dot"></div></div>
           <div class="gcard" data-id="three_fingers" data-color="#c084fc"><div class="gcard-icon">🤟</div><div class="gcard-body"><div class="gcard-name">ثلاثة أصابع</div><div class="gcard-desc">إبهام وسبابة ووسطى</div><div class="gcard-bar"><div class="gcard-bar-fill"></div></div></div><div class="gcard-dot"></div></div>
+          <div class="gcard" data-id="peace"         data-color="#38bdf8"><div class="gcard-icon">✌️</div><div class="gcard-body"><div class="gcard-name">علامة النصر</div><div class="gcard-desc">السبابة والوسطى فقط</div><div class="gcard-bar"><div class="gcard-bar-fill"></div></div></div><div class="gcard-dot"></div></div>
+          <div class="gcard" data-id="gun"           data-color="#f472b6"><div class="gcard-icon">🤙</div><div class="gcard-body"><div class="gcard-name">إبهام وسبابة</div><div class="gcard-desc">شكل حرف L</div><div class="gcard-bar"><div class="gcard-bar-fill"></div></div></div><div class="gcard-dot"></div></div>
+          <div class="gcard" data-id="thumb_up"      data-color="#4ade80"><div class="gcard-icon">👍</div><div class="gcard-body"><div class="gcard-name">إبهام لأعلى</div><div class="gcard-desc">الإبهام فقط مرفوع</div><div class="gcard-bar"><div class="gcard-bar-fill"></div></div></div><div class="gcard-dot"></div></div>
         </div>
         <div class="panel-section-title" style="margin-top:10px"><span>سجل النشاط</span><div class="panel-badge" id="log-count">0</div></div>
         <div id="activity-log"></div>
@@ -117,85 +122,107 @@
     <!-- ══════════ TAB: CHALLENGE ══════════ -->
     <div id="tab-challenge" class="tab-content">
 
-      <!-- Left: camera + overlay -->
       <div id="ch-viewport-wrap">
         <div class="corner tl"></div><div class="corner tr"></div>
         <div class="corner bl"></div><div class="corner br"></div>
 
-        <!-- Target gesture display -->
+        <!-- Mirror for challenge tab -->
+        <video id="video-ch-mirror" autoplay playsinline muted></video>
+        <canvas id="canvas2"></canvas>
+
+        <!-- Target -->
         <div id="ch-target-box">
           <div id="ch-target-label">الإيماءة المطلوبة</div>
           <div id="ch-target-emoji">🎯</div>
           <div id="ch-target-name">اضغط ابدأ</div>
         </div>
 
-        <!-- Detected gesture display -->
+        <!-- Detected -->
         <div id="ch-detected-box">
           <div id="ch-detected-label">إيماءتك الحالية</div>
           <div id="ch-detected-emoji">✋</div>
           <div id="ch-detected-name">--</div>
         </div>
 
-        <!-- Timer bar -->
+        <!-- Timer -->
         <div id="ch-timer-wrap">
-          <div id="ch-timer-bar-bg">
-            <div id="ch-timer-bar"></div>
-          </div>
+          <div id="ch-timer-bar-bg"><div id="ch-timer-bar"></div></div>
           <div id="ch-timer-text">10</div>
         </div>
 
-        <!-- Match flash -->
         <div id="ch-match-flash"></div>
-
-        <video id="video2" autoplay playsinline muted></video>
-        <canvas id="canvas2"></canvas>
       </div>
 
-      <!-- Right: challenge panel -->
       <aside id="ch-panel">
-
-        <!-- Level info -->
         <div id="ch-level-card">
           <div class="ch-level-header">
             <span id="ch-level-label">المستوى</span>
             <div id="ch-level-badge">1</div>
           </div>
           <div id="ch-level-desc">أداء <span id="ch-required-count">2</span> إيماءات بنجاح</div>
-          <div id="ch-progress-wrap">
-            <div class="ch-stars" id="ch-stars">
-              <span class="star">★</span><span class="star">★</span><span class="star">★</span>
-              <span class="star">★</span><span class="star">★</span>
-            </div>
+          <div class="ch-stars" id="ch-stars">
+            <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+            <span class="star">★</span><span class="star">★</span>
           </div>
         </div>
 
-        <!-- Score -->
         <div id="ch-score-row">
           <div class="ch-stat"><div class="ch-stat-val" id="ch-score">0</div><div class="ch-stat-key">نقاط</div></div>
           <div class="ch-stat"><div class="ch-stat-val" id="ch-combo">x1</div><div class="ch-stat-key">مضاعف</div></div>
           <div class="ch-stat"><div class="ch-stat-val" id="ch-streak">0</div><div class="ch-stat-key">متتالية</div></div>
         </div>
 
-        <!-- Sequence display -->
         <div class="panel-section-title"><span>تسلسل الإيماءات</span></div>
         <div id="ch-sequence"></div>
 
-        <!-- History -->
         <div class="panel-section-title" style="margin-top:8px"><span>السجل</span></div>
         <div id="ch-history"></div>
 
-        <!-- Buttons -->
         <div id="ch-buttons">
           <button id="ch-start-btn" class="ch-btn primary">▶ ابدأ التحدي</button>
           <button id="ch-reset-btn" class="ch-btn danger">↺ إعادة من الصفر</button>
         </div>
-
       </aside>
     </div>
 
   </main>
 </div>
 
+<script>
+  // Mirror the single camera stream to both visible video elements
+  window.addEventListener('load', () => {
+    const src = document.getElementById('video');
+    const mirrors = ['video-live-mirror', 'video-ch-mirror'];
+    mirrors.forEach(id => {
+      const el = document.getElementById(id);
+      // Wait for video to have a stream, then clone it
+      src.addEventListener('loadedmetadata', () => {
+        if (src.srcObject) {
+          el.srcObject = src.srcObject;
+        }
+      });
+      // Also try immediately in case already loaded
+      if (src.srcObject) el.srcObject = src.srcObject;
+    });
+
+    // Observe srcObject changes on the main video
+    const observer = new MutationObserver(() => {
+      mirrors.forEach(id => {
+        const el = document.getElementById(id);
+        if (src.srcObject) el.srcObject = src.srcObject;
+      });
+    });
+    // Poll for srcObject (MediaPipe sets it internally)
+    const poll = setInterval(() => {
+      if (src.srcObject) {
+        mirrors.forEach(id => {
+          document.getElementById(id).srcObject = src.srcObject;
+        });
+        clearInterval(poll);
+      }
+    }, 200);
+  });
+</script>
 <script src="script.js"></script>
 </body>
 </html>
