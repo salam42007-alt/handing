@@ -251,3 +251,17 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   #side-panel,#ch-panel { display:none; }
   #tab-live,#tab-challenge { flex-direction:column; }
 }
+
+/* ── Mirror video elements (display camera feed in each tab) ── */
+#video-live-mirror,
+#video-ch-mirror {
+  position: absolute;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: var(--r);
+  transform: scaleX(-1);  /* mirror effect */
+  z-index: 5;
+}
+/* Canvas sits on top of mirror video */
+#canvas  { z-index: 15; }
+#canvas2 { z-index: 15; }
