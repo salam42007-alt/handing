@@ -21,6 +21,9 @@
 <div id="scanlines"></div>
 <div id="grain"></div>
 
+<!-- Single hidden video — MediaPipe reads from here -->
+<video id="video" autoplay playsinline muted style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px"></video>
+
 <div id="app">
 
   <!-- ══ HEADER ══ -->
@@ -40,13 +43,14 @@
       </div>
       <div id="brand-text">
         <span id="brand-name">NEURO<em>HAND</em></span>
-        <span id="brand-sub">Gesture Intelligence System v2.3</span>
+        <span id="brand-sub">Gesture Intelligence System v3.0</span>
       </div>
     </div>
 
     <nav id="nav-tabs">
       <button class="tab-btn active" data-tab="live">🎯 مباشر</button>
       <button class="tab-btn" data-tab="challenge">⚡ تحديات</button>
+      <button class="tab-btn" data-tab="powers">🧠 قدرات</button>
     </nav>
 
     <div id="sys-info">
@@ -56,28 +60,16 @@
     </div>
   </header>
 
-  <!-- ══ MAIN ══ -->
   <main id="main">
-
-    <!--
-      ONE video element — hidden here, both tabs draw on their own canvas.
-      The video feeds the single MediaPipe instance.
-    -->
-    <video id="video" autoplay playsinline muted style="display:none"></video>
 
     <!-- ══════════ TAB: LIVE ══════════ -->
     <div id="tab-live" class="tab-content active">
-
-      <div id="viewport-wrap">
+      <div id="viewport-wrap" class="vp-wrap">
         <div class="corner tl"></div><div class="corner tr"></div>
         <div class="corner bl"></div><div class="corner br"></div>
-        <div id="scan-line"></div>
+        <div class="scan-line"></div>
+        <canvas id="canvas-live" class="cam-canvas"></canvas>
 
-        <!-- Mirror video visually for live tab -->
-        <video id="video-live-mirror" autoplay playsinline muted></video>
-        <canvas id="canvas"></canvas>
-
-        <!-- Gesture badge -->
         <div id="gesture-overlay">
           <div id="gesture-main">
             <div id="gesture-emoji-wrap">
@@ -94,7 +86,6 @@
           </div>
         </div>
 
-        <!-- HUD -->
         <div id="hud-tl" class="hud-panel">
           <div class="hud-row"><span class="hud-key">MODEL</span><span class="hud-val mono">MEDIAPIPE v0.4</span></div>
           <div class="hud-row"><span class="hud-key">LANDMARKS</span><span class="hud-val mono" id="lm-count">--/21</span></div>
@@ -121,35 +112,26 @@
 
     <!-- ══════════ TAB: CHALLENGE ══════════ -->
     <div id="tab-challenge" class="tab-content">
-
-      <div id="ch-viewport-wrap">
+      <div id="ch-viewport-wrap" class="vp-wrap">
         <div class="corner tl"></div><div class="corner tr"></div>
         <div class="corner bl"></div><div class="corner br"></div>
+        <div class="scan-line"></div>
+        <canvas id="canvas-challenge" class="cam-canvas"></canvas>
 
-        <!-- Mirror for challenge tab -->
-        <video id="video-ch-mirror" autoplay playsinline muted></video>
-        <canvas id="canvas2"></canvas>
-
-        <!-- Target -->
         <div id="ch-target-box">
           <div id="ch-target-label">الإيماءة المطلوبة</div>
           <div id="ch-target-emoji">🎯</div>
           <div id="ch-target-name">اضغط ابدأ</div>
         </div>
-
-        <!-- Detected -->
         <div id="ch-detected-box">
           <div id="ch-detected-label">إيماءتك الحالية</div>
           <div id="ch-detected-emoji">✋</div>
           <div id="ch-detected-name">--</div>
         </div>
-
-        <!-- Timer -->
         <div id="ch-timer-wrap">
           <div id="ch-timer-bar-bg"><div id="ch-timer-bar"></div></div>
           <div id="ch-timer-text">10</div>
         </div>
-
         <div id="ch-match-flash"></div>
       </div>
 
@@ -165,19 +147,15 @@
             <span class="star">★</span><span class="star">★</span>
           </div>
         </div>
-
         <div id="ch-score-row">
           <div class="ch-stat"><div class="ch-stat-val" id="ch-score">0</div><div class="ch-stat-key">نقاط</div></div>
           <div class="ch-stat"><div class="ch-stat-val" id="ch-combo">x1</div><div class="ch-stat-key">مضاعف</div></div>
           <div class="ch-stat"><div class="ch-stat-val" id="ch-streak">0</div><div class="ch-stat-key">متتالية</div></div>
         </div>
-
         <div class="panel-section-title"><span>تسلسل الإيماءات</span></div>
         <div id="ch-sequence"></div>
-
         <div class="panel-section-title" style="margin-top:8px"><span>السجل</span></div>
         <div id="ch-history"></div>
-
         <div id="ch-buttons">
           <button id="ch-start-btn" class="ch-btn primary">▶ ابدأ التحدي</button>
           <button id="ch-reset-btn" class="ch-btn danger">↺ إعادة من الصفر</button>
@@ -185,44 +163,120 @@
       </aside>
     </div>
 
+    <!-- ══════════ TAB: POWERS (قدرات) ══════════ -->
+    <div id="tab-powers" class="tab-content">
+
+      <!-- Camera viewport — دائماً ظاهر على اليسار -->
+      <div id="pw-viewport-wrap" class="vp-wrap">
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <div class="scan-line"></div>
+        <canvas id="canvas-powers" class="cam-canvas"></canvas>
+
+        <!-- 2-hand status HUD -->
+        <div id="pw-hands-hud" class="hud-panel">
+          <div class="hud-row">
+            <span class="hud-key">اليد اليمنى</span>
+            <span class="pw-hand-chip" id="pw-right-chip">--</span>
+          </div>
+          <div class="hud-row">
+            <span class="hud-key">اليد اليسرى</span>
+            <span class="pw-hand-chip" id="pw-left-chip">--</span>
+          </div>
+        </div>
+
+        <!-- Recording countdown overlay -->
+        <div id="pw-rec-overlay" class="pw-overlay hidden">
+          <div id="pw-rec-count">3</div>
+          <div id="pw-rec-label">استعد...</div>
+        </div>
+
+        <!-- Playback overlay -->
+        <div id="pw-play-overlay" class="pw-overlay hidden">
+          <div id="pw-play-arrow">▶</div>
+          <div id="pw-play-step">--</div>
+          <div id="pw-play-info">اعمل الإيماءة</div>
+        </div>
+
+        <!-- Recording progress bar -->
+        <div id="pw-rec-bar-wrap" class="hidden">
+          <div id="pw-rec-bar-track">
+            <div id="pw-rec-bar-fill"></div>
+          </div>
+          <div id="pw-rec-bar-label">تسجيل 0 / 20</div>
+        </div>
+      </div>
+
+      <!-- Powers panel -->
+      <aside id="pw-panel">
+
+        <!-- Mode switcher -->
+        <div id="pw-mode-tabs">
+          <button class="pw-mode-btn active" data-mode="record">⏺ تسجيل</button>
+          <button class="pw-mode-btn" data-mode="playback">▶ اختبار</button>
+        </div>
+
+        <!-- ─── RECORD PANEL ─── -->
+        <div id="pw-record-section" class="pw-section">
+          <div class="panel-section-title">
+            <span>تسجيل تسلسل</span>
+            <div class="panel-badge" id="pw-rec-count-badge">0/20</div>
+          </div>
+
+          <!-- Name input -->
+          <div id="pw-name-wrap">
+            <label class="pw-label">اسم التسلسل</label>
+            <input id="pw-seq-name" type="text" placeholder="مثال: تحية خاصة" maxlength="24" autocomplete="off"/>
+          </div>
+
+          <!-- Recorded gestures preview -->
+          <div id="pw-rec-preview"></div>
+
+          <!-- Controls -->
+          <div id="pw-rec-controls">
+            <button id="pw-rec-start-btn" class="ch-btn primary">⏺ ابدأ التسجيل</button>
+            <button id="pw-rec-stop-btn" class="ch-btn" disabled>⏹ إيقاف</button>
+            <button id="pw-rec-clear-btn" class="ch-btn danger">🗑 مسح</button>
+            <button id="pw-rec-save-btn" class="ch-btn success" disabled>💾 حفظ</button>
+          </div>
+        </div>
+
+        <!-- ─── PLAYBACK PANEL ─── -->
+        <div id="pw-playback-section" class="pw-section hidden">
+          <div class="panel-section-title">
+            <span>التسلسلات المحفوظة</span>
+            <div class="panel-badge" id="pw-saved-count">0</div>
+          </div>
+
+          <div id="pw-saved-list"></div>
+
+          <!-- Playback result -->
+          <div id="pw-result-box" class="hidden">
+            <div class="panel-section-title" style="margin-bottom:6px"><span>نتيجة الاختبار</span></div>
+            <div id="pw-result-stats">
+              <div class="pw-result-stat">
+                <div class="pw-result-val" id="pw-res-correct">0</div>
+                <div class="pw-result-key">صحيح ✓</div>
+              </div>
+              <div class="pw-result-stat">
+                <div class="pw-result-val err" id="pw-res-errors">0</div>
+                <div class="pw-result-key">خطأ ✗</div>
+              </div>
+              <div class="pw-result-stat">
+                <div class="pw-result-val acc" id="pw-res-accuracy">0%</div>
+                <div class="pw-result-key">دقة</div>
+              </div>
+            </div>
+            <div id="pw-result-steps"></div>
+          </div>
+        </div>
+
+      </aside>
+    </div>
+
   </main>
 </div>
 
-<script>
-  // Mirror the single camera stream to both visible video elements
-  window.addEventListener('load', () => {
-    const src = document.getElementById('video');
-    const mirrors = ['video-live-mirror', 'video-ch-mirror'];
-    mirrors.forEach(id => {
-      const el = document.getElementById(id);
-      // Wait for video to have a stream, then clone it
-      src.addEventListener('loadedmetadata', () => {
-        if (src.srcObject) {
-          el.srcObject = src.srcObject;
-        }
-      });
-      // Also try immediately in case already loaded
-      if (src.srcObject) el.srcObject = src.srcObject;
-    });
-
-    // Observe srcObject changes on the main video
-    const observer = new MutationObserver(() => {
-      mirrors.forEach(id => {
-        const el = document.getElementById(id);
-        if (src.srcObject) el.srcObject = src.srcObject;
-      });
-    });
-    // Poll for srcObject (MediaPipe sets it internally)
-    const poll = setInterval(() => {
-      if (src.srcObject) {
-        mirrors.forEach(id => {
-          document.getElementById(id).srcObject = src.srcObject;
-        });
-        clearInterval(poll);
-      }
-    }, 200);
-  });
-</script>
 <script src="script.js"></script>
 </body>
 </html>
