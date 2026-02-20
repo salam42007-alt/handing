@@ -513,6 +513,12 @@ function onResults(results) {
     return;
   }
 
+  // ── SIGNS ──
+  if(activeTab==='signs'){
+    updateSigns(hands);
+    return;
+  }
+
   // ── POWERS ──
   if(activeTab==='powers'){
     // Update hand chips
@@ -560,6 +566,229 @@ function onResults(results) {
 }
 
 // ═══════════════════════════════════════════
+//  SIGNS TAB — لغة الأصابع
+// ═══════════════════════════════════════════
+
+// DOM refs
+const sgWordEl    = document.getElementById('sg-word');
+const sgWordAr    = document.getElementById('sg-word-ar');
+const sgWordBox   = document.getElementById('sg-word-box');
+const sgSent      = document.getElementById('sg-sent');
+const sgFullSent  = document.getElementById('sg-full-sent');
+const sgClear     = document.getElementById('sg-clear');
+const sgWordCount = document.getElementById('sg-word-count');
+
+// Finger card elements on canvas overlay
+const sgCards = {
+  thumb:  document.getElementById('sgc-thumb'),
+  index:  document.getElementById('sgc-index'),
+  middle: document.getElementById('sgc-middle'),
+  ring:   document.getElementById('sgc-ring'),
+  pinky:  document.getElementById('sgc-pinky'),
+};
+
+// Sidebar map rows
+const sgMapRows = {
+  thumb:  document.getElementById('sgv-thumb'),
+  index:  document.getElementById('sgv-index'),
+  middle: document.getElementById('sgv-middle'),
+  ring:   document.getElementById('sgv-ring'),
+  pinky:  document.getElementById('sgv-pinky'),
+};
+
+// Custom word inputs
+const sgInputs = {
+  thumb:  document.getElementById('sgi-thumb'),
+  index:  document.getElementById('sgi-index'),
+  middle: document.getElementById('sgi-middle'),
+  ring:   document.getElementById('sgi-ring'),
+  pinky:  document.getElementById('sgi-pinky'),
+};
+
+// Finger icons shown in overlay card
+const SG_ICONS = { thumb:'👍', index:'☝️', middle:'🖕', ring:'💍', pinky:'🤙' };
+
+// Default words (editable by user)
+const sgWords = { thumb:'أنا', index:'لا', middle:'--', ring:'أحبك', pinky:'معكوس' };
+
+// Hold system: must hold single finger for N frames before capturing word
+const SG_HOLD_NEEDED = 18;
+let sgHoldFinger = null;   // which finger is currently being held
+let sgHoldFrames = 0;
+let sgSentenceWords = [];  // array of words in sentence
+let sgLastAdded = null;    // prevent double-adding same word immediately
+let sgCooldown = 0;        // cooldown frames after a word is added
+
+// Update sidebar inputs live
+function sgSyncInputs() {
+  Object.keys(sgInputs).forEach(key => {
+    const inp = sgInputs[key];
+    if (!inp) return;
+    inp.addEventListener('input', () => {
+      sgWords[key] = inp.value.trim() || '--';
+      // update overlay card word
+      const fc = sgCards[key];
+      if (fc) fc.querySelector('.sg-fw').textContent = sgWords[key];
+      // update sidebar map
+      if (sgMapRows[key]) sgMapRows[key].textContent = sgWords[key];
+    });
+  });
+}
+
+// Detect which SINGLE finger is raised (only one at a time)
+// Returns: 'thumb' | 'index' | 'middle' | 'ring' | 'pinky' | null
+function detectSingleFinger(lm) {
+  if (!lm) return null;
+
+  const thumbUp  = isThumbOut(lm);
+  const indexUp  = isUp(lm, LM.INDEX_TIP,  LM.INDEX_PIP);
+  const middleUp = isUp(lm, LM.MIDDLE_TIP, LM.MIDDLE_PIP);
+  const ringUp   = isUp(lm, LM.RING_TIP,   LM.RING_PIP);
+  const pinkyUp  = isUp(lm, LM.PINKY_TIP,  LM.PINKY_PIP);
+
+  // Count how many are raised — must be exactly 1
+  const count = [thumbUp, indexUp, middleUp, ringUp, pinkyUp].filter(Boolean).length;
+  if (count !== 1) return null;
+
+  if (thumbUp)  return 'thumb';
+  if (indexUp)  return 'index';
+  if (middleUp) return 'middle';
+  if (ringUp)   return 'ring';
+  if (pinkyUp)  return 'pinky';
+  return null;
+}
+
+// Add a word to sentence
+function sgAddWord(finger) {
+  const word = sgWords[finger];
+  if (!word || word === '--') return;
+
+  sgSentenceWords.push(word);
+
+  // Token in overlay sentence strip
+  const tok = document.createElement('span');
+  tok.className = 'sg-word-token';
+  tok.textContent = word;
+  sgSent.appendChild(tok);
+  // Keep strip scrolled to end (latest word)
+  sgSent.scrollLeft = sgSent.scrollWidth;
+
+  // Update full sentence in panel
+  if (sgFullSent) sgFullSent.textContent = sgSentenceWords.join(' ');
+  if (sgWordCount) sgWordCount.textContent = sgSentenceWords.length + ' كلمة';
+
+  // Animate word box
+  sgWordBox.classList.remove('pop');
+  void sgWordBox.offsetWidth;
+  sgWordBox.classList.add('pop');
+
+  sgLastAdded = finger;
+  sgCooldown  = 25; // wait 25 frames before allowing same finger again
+}
+
+// Clear sentence
+function sgClearSentence() {
+  sgSentenceWords  = [];
+  sgSent.innerHTML = '';
+  if (sgFullSent)  sgFullSent.textContent = '';
+  if (sgWordCount) sgWordCount.textContent = '0 كلمة';
+  sgLastAdded  = null;
+  sgHoldFinger = null;
+  sgHoldFrames = 0;
+  sgCooldown   = 0;
+  // Reset big display
+  sgWordEl.textContent  = '✋';
+  sgWordAr.textContent  = 'ارفع إصبعًا';
+}
+
+// Main update function called from onResults
+function updateSigns(hands) {
+  // Decrease cooldown
+  if (sgCooldown > 0) sgCooldown--;
+
+  // Deactivate all cards
+  Object.values(sgCards).forEach(c => { if (c) c.classList.remove('active'); });
+  // Deactivate all map rows
+  document.querySelectorAll('.sg-row').forEach(r => r.classList.remove('active'));
+
+  if (!hands || !hands.length) {
+    sgHoldFinger = null;
+    sgHoldFrames = 0;
+    sgWordEl.textContent = '✋';
+    sgWordAr.textContent = 'ارفع إصبعًا';
+    return;
+  }
+
+  const lm     = hands[0];
+  const finger = detectSingleFinger(lm);
+
+  if (finger) {
+    // Highlight the active card
+    if (sgCards[finger]) sgCards[finger].classList.add('active');
+
+    // Highlight map row in panel
+    const rowEl = document.querySelector(`#sg-map .sg-row:nth-child(${
+      ['thumb','index','middle','ring','pinky'].indexOf(finger) + 1
+    })`);
+    if (rowEl) rowEl.classList.add('active');
+
+    // Show current finger word in big display
+    const word = sgWords[finger];
+    sgWordEl.textContent  = SG_ICONS[finger];
+    sgWordAr.textContent  = word !== '--' ? word : '---';
+
+    // Hold logic
+    if (sgHoldFinger === finger) {
+      sgHoldFrames++;
+    } else {
+      sgHoldFinger = finger;
+      sgHoldFrames = 1;
+    }
+
+    // Show hold progress on active card (border animation via inline style)
+    const pct = Math.min(100, (sgHoldFrames / SG_HOLD_NEEDED) * 100);
+    if (sgCards[finger]) {
+      sgCards[finger].style.boxShadow =
+        `0 0 ${8 + pct * 0.3}px rgba(192,132,252,${0.3 + pct * 0.005})`;
+      sgCards[finger].style.borderColor =
+        pct >= 100 ? '#4ade80' : `rgba(192,132,252,${0.3 + pct * 0.007})`;
+    }
+
+    // Capture word when held long enough
+    if (sgHoldFrames >= SG_HOLD_NEEDED) {
+      // Only add if cooldown is over (prevents re-trigger)
+      if (sgCooldown === 0) {
+        sgAddWord(finger);
+        // Flash the card green briefly
+        if (sgCards[finger]) {
+          sgCards[finger].style.background = 'rgba(74,222,128,0.25)';
+          setTimeout(() => {
+            if (sgCards[finger]) sgCards[finger].style.background = '';
+          }, 300);
+        }
+      }
+      // Reset hold (must lift and re-raise to add another)
+      sgHoldFinger = null;
+      sgHoldFrames = 0;
+    }
+
+  } else {
+    // No single finger — reset hold
+    sgHoldFinger = null;
+    sgHoldFrames = 0;
+    // Reset card styles
+    Object.values(sgCards).forEach(c => {
+      if (c) { c.style.boxShadow = ''; c.style.borderColor = ''; }
+    });
+    sgWordEl.textContent = '✋';
+    sgWordAr.textContent = 'ارفع إصبعًا';
+  }
+}
+
+// Wire up clear button
+if (sgClear) sgClear.addEventListener('click', sgClearSentence);
+
+// ═══════════════════════════════════════════
 //  TAB SWITCHING
 // ═══════════════════════════════════════════
 document.querySelectorAll('.tab').forEach(btn=>{
@@ -596,6 +825,23 @@ function init(){
   });
   hands.onResults(onResults);
 
+  const camera=new Camera(vid,{
+    onFrame:async()=>{ await hands.send({image:vid}); },
+    width:1280, height:720,
+  });
+  camera.start().then(()=>{
+    statusDot.classList.add('on');
+    statusText.textContent='النظام يعمل ✓';
+  }).catch(err=>{
+    statusText.textContent='خطأ: '+err.message;
+    console.error(err);
+  });
+}
+
+// clock
+setInterval(()=>{ clockEl.textContent=new Date().toLocaleTimeString('en',{hour12:false}); },1000);
+
+window.addEventListener('load',()=>{ initCards(); sgSyncInputs(); init(); });
   const camera=new Camera(vid,{
     onFrame:async()=>{ await hands.send({image:vid}); },
     width:1280, height:720,
