@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>NEUROHAND</title>
+  <title>NEUROHAND v7</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Tajawal:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css"/>
@@ -28,14 +27,14 @@
       </div>
       <div>
         <div id="brand-name">NEURO<em>HAND</em></div>
-        <div id="brand-sub">Gesture AI v5.0</div>
+        <div id="brand-sub">Gesture AI v7.0</div>
       </div>
     </div>
     <nav id="tabs">
       <button class="tab active" data-tab="live">🎯 مباشر</button>
       <button class="tab" data-tab="challenge">⚡ تحديات</button>
       <button class="tab" data-tab="powers">🧠 قدرات</button>
-      <button class="tab" data-tab="signs">🤞 لغة الأصابع</button>
+      <button class="tab" data-tab="draw">🎨 رسم</button>
     </nav>
     <div id="hdr-info">
       <div class="chip"><span id="status-dot" class="dot"></span><span id="status-text">تهيئة...</span></div>
@@ -50,10 +49,11 @@
       <div class="corner bl"></div><div class="corner br"></div>
       <div id="scan-line"></div>
 
-      <!-- Canvas draws everything: mirrored video + skeleton -->
+      <!-- كانفاس الكاميرا + هيكل اليد -->
       <canvas id="cv"></canvas>
+      <!-- كانفاس الرسم (فوق الكاميرا) -->
+      <canvas id="draw-cv"></canvas>
 
-      <!-- Video: visible=hidden keeps camera alive without showing element -->
       <video id="vid" autoplay playsinline muted
              style="position:absolute;visibility:hidden;width:1px;height:1px;top:0;left:0"></video>
 
@@ -74,10 +74,7 @@
         </div>
         <div class="hud" style="top:48px;left:14px">
           <div class="hr"><span class="hk">HANDS</span><span class="hv mono" id="hand-count">0</span></div>
-          <div class="hr"><span class="hk">POINTS</span><span class="hv mono" id="lm-count">--</span></div>
-        </div>
-        <div class="hud" style="top:48px;right:14px">
-          <div class="hr"><span class="hk">الحالة</span><span class="hv" id="g-state">--</span></div>
+          <div class="hr"><span class="hk">STATE</span><span class="hv" id="g-state">--</span></div>
         </div>
       </div>
 
@@ -119,72 +116,41 @@
         </div>
       </div>
 
-      <!-- SIGNS overlays -->
-      <div id="ov-signs" class="tab-ov">
-        <!-- Big word display -->
-        <div id="sg-display">
-          <div id="sg-big-emoji">✋</div>
-          <div id="sg-big-word">ارفع إصبعاً</div>
+      <!-- DRAW overlays -->
+      <div id="ov-draw" class="tab-ov">
+        <!-- مؤشر اللون الحالي -->
+        <div id="draw-color-hud" class="hud" style="top:48px;right:14px">
+          <div class="hr"><span class="hk">اللون</span><div id="draw-color-dot"></div></div>
+          <div class="hr"><span class="hk">الوضع</span><span id="draw-mode-lbl" class="hv">رسم ✏️</span></div>
         </div>
-        <!-- Hold ring -->
-        <div id="sg-hold-ring-wrap">
-          <svg viewBox="0 0 120 120" style="width:100%;height:100%;transform:rotate(-90deg)">
-            <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="5"/>
-            <circle id="sg-ring-fill" cx="60" cy="60" r="54" fill="none" stroke="#c084fc"
-                    stroke-width="5" stroke-linecap="round"
-                    stroke-dasharray="339.29" stroke-dashoffset="339.29"/>
-          </svg>
-        </div>
-        <!-- Finger cards -->
-        <div id="sg-guide">
-          <div class="sg-fc" data-finger="thumb">
-            <div class="sg-fi">👍</div>
-            <div class="sg-fw" id="sgfw-thumb">أنا</div>
-          </div>
-          <div class="sg-fc" data-finger="index">
-            <div class="sg-fi">☝️</div>
-            <div class="sg-fw" id="sgfw-index">لا</div>
-          </div>
-          <div class="sg-fc" data-finger="middle">
-            <div class="sg-fi">🖕</div>
-            <div class="sg-fw" id="sgfw-middle">يمكن</div>
-          </div>
-          <div class="sg-fc" data-finger="ring">
-            <div class="sg-fi">💍</div>
-            <div class="sg-fw" id="sgfw-ring">أحبك</div>
-          </div>
-          <div class="sg-fc" data-finger="pinky">
-            <div class="sg-fi">🤙</div>
-            <div class="sg-fw" id="sgfw-pinky">معكوس</div>
-          </div>
-        </div>
-        <!-- Sentence strip -->
-        <div id="sg-strip">
-          <div id="sg-strip-words"><span style="color:var(--mu);font-size:.8rem">الجملة ستظهر هنا...</span></div>
-          <button id="sg-clear-btn">🗑</button>
+        <!-- دليل الحركات -->
+        <div id="draw-hint">
+          <span>☝️ ارفع سبابتك للرسم</span>
+          <span>👍 إبهام لأعلى = لون جديد</span>
+          <span>🖐️ السلام + لمس = ممحاة</span>
         </div>
       </div>
 
     </div><!-- cam-box -->
 
-    <!-- SIDE PANELS -->
     <div id="panels">
 
-      <!-- LIVE -->
+      <!-- LIVE panel -->
       <aside id="panel-live" class="panel active">
-        <div class="pt"><span>الإيماءات</span><span class="pb">5</span></div>
+        <div class="pt"><span>الإيماءات</span><span class="pb">6</span></div>
         <div id="gcards">
-          <div class="gc" data-id="open_hand"     data-color="#fb923c"><span class="gi">🖐️</span><div class="gg"><div class="gn">السلام</div><div class="gd">كل الأصابع</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
-          <div class="gc" data-id="three_fingers" data-color="#c084fc"><span class="gi">🤟</span><div class="gg"><div class="gn">ثلاثة أصابع</div><div class="gd">إبهام+سبابة+وسطى</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
-          <div class="gc" data-id="peace"         data-color="#38bdf8"><span class="gi">✌️</span><div class="gg"><div class="gn">علامة النصر</div><div class="gd">سبابة ووسطى</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
-          <div class="gc" data-id="gun"           data-color="#f472b6"><span class="gi">🤙</span><div class="gg"><div class="gn">إبهام وسبابة</div><div class="gd">شكل L</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
-          <div class="gc" data-id="thumb_up"      data-color="#4ade80"><span class="gi">👍</span><div class="gg"><div class="gn">إبهام لأعلى</div><div class="gd">الإبهام فقط</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
+          <div class="gc" data-id="open_hand"    data-color="#fb923c"><span class="gi">🖐️</span><div class="gg"><div class="gn">السلام</div><div class="gd">كل الأصابع مرفوعة</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
+          <div class="gc" data-id="four_fingers" data-color="#f472b6"><span class="gi">🤘</span><div class="gg"><div class="gn">أربعة أصابع</div><div class="gd">بدون إبهام</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
+          <div class="gc" data-id="three_fingers"data-color="#c084fc"><span class="gi">🤟</span><div class="gg"><div class="gn">ثلاثة أصابع</div><div class="gd">إبهام+سبابة+وسطى</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
+          <div class="gc" data-id="peace"        data-color="#38bdf8"><span class="gi">✌️</span><div class="gg"><div class="gn">علامة النصر</div><div class="gd">سبابة ووسطى</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
+          <div class="gc" data-id="gun"          data-color="#f472b6"><span class="gi">🤙</span><div class="gg"><div class="gn">إبهام وسبابة</div><div class="gd">شكل L</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
+          <div class="gc" data-id="thumb_up"     data-color="#4ade80"><span class="gi">👍</span><div class="gg"><div class="gn">إبهام لأعلى</div><div class="gd">الإبهام فقط</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
         </div>
         <div class="pt" style="margin-top:8px"><span>سجل النشاط</span><span class="pb" id="log-count">0</span></div>
         <div id="log"></div>
       </aside>
 
-      <!-- CHALLENGE -->
+      <!-- CHALLENGE panel -->
       <aside id="panel-challenge" class="panel">
         <div id="ch-level-card">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -208,7 +174,7 @@
         </div>
       </aside>
 
-      <!-- POWERS -->
+      <!-- POWERS panel -->
       <aside id="panel-powers" class="panel">
         <div id="pw-tabs">
           <button class="ptab active" data-m="rec">⏺ تسجيل</button>
@@ -241,35 +207,52 @@
         </div>
       </aside>
 
-      <!-- SIGNS -->
-      <aside id="panel-signs" class="panel">
-        <div class="pt"><span>لغة الأصابع</span></div>
-
-        <div id="sg-sentence-panel">الجملة ستظهر هنا...</div>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="mono-xs" id="sg-word-count">0 كلمة</span>
-          <button id="sg-clear-panel" class="btn danger" style="width:auto;padding:4px 12px;font-size:.75rem">🗑 مسح</button>
+      <!-- DRAW panel -->
+      <aside id="panel-draw" class="panel">
+        <div class="pt"><span>🎨 الرسم بالإيماءة</span></div>
+        <div id="draw-info">
+          <div class="draw-row">
+            <div class="draw-icon">☝️</div>
+            <div>
+              <div class="draw-title">الرسم</div>
+              <div class="draw-desc">ارفع السبابة فقط — حرّكها لترسم</div>
+            </div>
+          </div>
+          <div class="draw-row">
+            <div class="draw-icon">👍</div>
+            <div>
+              <div class="draw-title">تغيير اللون</div>
+              <div class="draw-desc">ارفع الإبهام فقط — يدور بين الألوان</div>
+            </div>
+          </div>
+          <div class="draw-row">
+            <div class="draw-icon">🖐️</div>
+            <div>
+              <div class="draw-title">الممحاة</div>
+              <div class="draw-desc">السلام + حرّك يدك فوق خط لتمحوه</div>
+            </div>
+          </div>
+          <div class="draw-row">
+            <div class="draw-icon">✊</div>
+            <div>
+              <div class="draw-title">توقف</div>
+              <div class="draw-desc">اقبض يدك لإيقاف الرسم مؤقتاً</div>
+            </div>
+          </div>
         </div>
 
-        <div class="pt"><span>تخصيص الكلمات</span></div>
-        <div id="sg-custom">
-          <div class="sg-custom-row"><span class="sg-ckey">👍 إبهام</span><input class="sg-inp" id="sgi-thumb"  value="أنا"    maxlength="12"/></div>
-          <div class="sg-custom-row"><span class="sg-ckey">☝️ سبابة</span><input class="sg-inp" id="sgi-index"  value="لا"     maxlength="12"/></div>
-          <div class="sg-custom-row"><span class="sg-ckey">🖕 وسطى</span> <input class="sg-inp" id="sgi-middle" value="يمكن"   maxlength="12"/></div>
-          <div class="sg-custom-row"><span class="sg-ckey">💍 بنصر</span> <input class="sg-inp" id="sgi-ring"   value="أحبك"   maxlength="12"/></div>
-          <div class="sg-custom-row"><span class="sg-ckey">🤙 خنصر</span> <input class="sg-inp" id="sgi-pinky"  value="معكوس"  maxlength="12"/></div>
-        </div>
+        <div class="pt" style="margin-top:4px"><span>لوحة الألوان</span></div>
+        <div id="draw-palette"></div>
 
-        <div class="pt" style="margin-top:6px"><span>كيفية الاستخدام</span></div>
-        <div id="sg-how">
-          <div class="sg-tip">١. ارفع إصبعاً واحداً فقط</div>
-          <div class="sg-tip">٢. ثبّته حتى تمتلئ الدائرة</div>
-          <div class="sg-tip">٣. تُضاف الكلمة تلقائياً</div>
-          <div class="sg-tip">٤. الكلمات تُبنى جملة كاملة</div>
+        <div class="pt" style="margin-top:4px"><span>أدوات</span></div>
+        <div id="draw-tools">
+          <div class="draw-stat"><span class="draw-sk">الخطوط</span><span id="draw-lines-count" class="draw-sv">0</span></div>
+          <div class="draw-stat"><span class="draw-sk">اللون</span><div id="draw-cur-color-box"></div></div>
         </div>
+        <button id="draw-clear-all" class="btn danger" style="margin-top:6px">🗑 مسح الكل</button>
       </aside>
 
-    </div><!-- panels -->
+    </div>
   </main>
 </div>
 
