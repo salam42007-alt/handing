@@ -7,19 +7,32 @@ const ROUND_SEC = 7;     // seconds per sign
 const THRESHOLD = 0.70;  // match threshold (0–1)
 const BOX_PAD   = 28;    // px padding around hand box
 
-// 9 Naruto hand seals — put images in ./signs/sign_01.jpg ... sign_09.jpg
-// fingers: [thumb, index, middle, ring, pinky]  1=extended 0=curled
-// thumbOut: thumb abducted (spread away from palm)
+// 9 sign images — placed in ./signs/
+// Finger descriptors analyzed from actual images:
+//   fingers: [thumb, index, middle, ring, pinky]  1=extended 0=curled
+//   thumbOut: thumb visibly abducted away from palm
+//
+// Duplicates (Hare×2, Bird×2) are intentional — same gesture, same descriptor.
+// The challenge picks them randomly so the same seal can appear twice in one round.
 const SIGNS = [
-  { id:1, name:'子 Rat',    img:'signs/sign_01.png', fingers:[0,1,1,0,0], thumbOut:false },
-  { id:2, name:'丑 Ox',     img:'signs/sign_02.png', fingers:[0,1,0,0,0], thumbOut:false },
-  { id:3, name:'寅 Tiger',  img:'signs/sign_03.png', fingers:[0,1,1,1,1], thumbOut:true  },
-  { id:4, name:'卯 Hare',   img:'signs/sign_04.png', fingers:[1,1,0,0,0], thumbOut:true  },
-  { id:5, name:'辰 Dragon', img:'signs/sign_05.png', fingers:[0,0,0,0,0], thumbOut:false },
-  { id:6, name:'巳 Snake',  img:'signs/sign_06.png', fingers:[1,1,1,1,1], thumbOut:true  },
-  { id:7, name:'午 Horse',  img:'signs/sign_07.png', fingers:[1,0,0,0,1], thumbOut:true  },
-  { id:8, name:'未 Ram',    img:'signs/sign_08.png', fingers:[0,0,1,1,0], thumbOut:false },
-  { id:9, name:'申 Monkey', img:'signs/sign_09.png', fingers:[0,1,0,0,1], thumbOut:false },
+  // sign_01: Bird — palms together, fingers interlaced pointing up, thumbs crossed
+  { id:1,  name:'Bird',   img:'signs/sign_01.png', fingers:[0,1,1,1,1], thumbOut:false },
+  // sign_02: Ox — index fingers extended, other fingers interlocked/curled
+  { id:2,  name:'Ox',     img:'signs/sign_02.png', fingers:[0,1,0,0,0], thumbOut:false },
+  // sign_03: Monkey — hands clasped flat, fingers wrapped around each other
+  { id:3,  name:'Monkey', img:'signs/sign_03.png', fingers:[0,0,0,0,0], thumbOut:false },
+  // sign_04: Horse — fingers spread open and interlocked, palms facing
+  { id:4,  name:'Horse',  img:'signs/sign_04.png', fingers:[1,1,1,1,1], thumbOut:true  },
+  // sign_05: Hare — index + middle extended together (pointing gesture)
+  { id:5,  name:'Hare',   img:'signs/sign_05.png', fingers:[0,1,1,0,0], thumbOut:false },
+  // sign_06: Boar — hands overlapping flat, fingers extended and stacked
+  { id:6,  name:'Boar',   img:'signs/sign_06.png', fingers:[1,1,1,1,1], thumbOut:false },
+  // sign_07: Dog — fingers interlocked, index fingers of both hands raised
+  { id:7,  name:'Dog',    img:'signs/sign_07.png', fingers:[0,1,0,0,0], thumbOut:true  },
+  // sign_08: Hare (duplicate) — same as sign_05
+  { id:8,  name:'Hare',   img:'signs/sign_08.png', fingers:[0,1,1,0,0], thumbOut:false },
+  // sign_09: Bird (duplicate) — same as sign_01
+  { id:9,  name:'Bird',   img:'signs/sign_09.png', fingers:[0,1,1,1,1], thumbOut:false },
 ];
 
 // ─── STATE ────────────────────────────────────────────────────
