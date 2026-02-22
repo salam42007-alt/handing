@@ -11,15 +11,15 @@ const BOX_PAD   = 28;    // px padding around hand box
 // fingers: [thumb, index, middle, ring, pinky]  1=extended 0=curled
 // thumbOut: thumb abducted (spread away from palm)
 const SIGNS = [
-  { id:1, name:'子 Rat',    img:'signs/sign_01.jpg', fingers:[0,1,1,0,0], thumbOut:false },
-  { id:2, name:'丑 Ox',     img:'signs/sign_02.jpg', fingers:[0,1,0,0,0], thumbOut:false },
-  { id:3, name:'寅 Tiger',  img:'signs/sign_03.jpg', fingers:[0,1,1,1,1], thumbOut:true  },
-  { id:4, name:'卯 Hare',   img:'signs/sign_04.jpg', fingers:[1,1,0,0,0], thumbOut:true  },
-  { id:5, name:'辰 Dragon', img:'signs/sign_05.jpg', fingers:[0,0,0,0,0], thumbOut:false },
-  { id:6, name:'巳 Snake',  img:'signs/sign_06.jpg', fingers:[1,1,1,1,1], thumbOut:true  },
-  { id:7, name:'午 Horse',  img:'signs/sign_07.jpg', fingers:[1,0,0,0,1], thumbOut:true  },
-  { id:8, name:'未 Ram',    img:'signs/sign_08.jpg', fingers:[0,0,1,1,0], thumbOut:false },
-  { id:9, name:'申 Monkey', img:'signs/sign_09.jpg', fingers:[0,1,0,0,1], thumbOut:false },
+  { id:1, name:'子 Rat',    img:'signs/sign_01.png', fingers:[0,1,1,0,0], thumbOut:false },
+  { id:2, name:'丑 Ox',     img:'signs/sign_02.png', fingers:[0,1,0,0,0], thumbOut:false },
+  { id:3, name:'寅 Tiger',  img:'signs/sign_03.png', fingers:[0,1,1,1,1], thumbOut:true  },
+  { id:4, name:'卯 Hare',   img:'signs/sign_04.png', fingers:[1,1,0,0,0], thumbOut:true  },
+  { id:5, name:'辰 Dragon', img:'signs/sign_05.png', fingers:[0,0,0,0,0], thumbOut:false },
+  { id:6, name:'巳 Snake',  img:'signs/sign_06.png', fingers:[1,1,1,1,1], thumbOut:true  },
+  { id:7, name:'午 Horse',  img:'signs/sign_07.png', fingers:[1,0,0,0,1], thumbOut:true  },
+  { id:8, name:'未 Ram',    img:'signs/sign_08.png', fingers:[0,0,1,1,0], thumbOut:false },
+  { id:9, name:'申 Monkey', img:'signs/sign_09.png', fingers:[0,1,0,0,1], thumbOut:false },
 ];
 
 // ─── STATE ────────────────────────────────────────────────────
