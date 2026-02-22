@@ -1,261 +1,131 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>NEUROHAND v7</title>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Tajawal:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Naruto Hand Signs</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Noto+Sans+Arabic:wght@300;400;700&display=swap" rel="stylesheet" />
 </head>
 <body>
 
-<div id="bg-layer"><div class="orb o1"></div><div class="orb o2"></div></div>
+  <!-- Particles background -->
+  <canvas id="particles-bg"></canvas>
 
-<div id="app">
-  <header>
-    <div id="brand">
-      <div id="brand-icon">
-        <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
-          <path d="M16 2L28 8V24L16 30L4 24V8Z" stroke="url(#g1)" stroke-width="1.5" fill="none"/>
-          <circle cx="16" cy="16" r="5" fill="url(#g1)" opacity=".7"/>
-          <defs><linearGradient id="g1" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#38bdf8"/>
-          </linearGradient></defs>
-        </svg>
-      </div>
-      <div>
-        <div id="brand-name">NEURO<em>HAND</em></div>
-        <div id="brand-sub">Gesture AI v7.0</div>
+  <!-- INTRO SCREEN -->
+  <div id="intro-screen">
+    <div class="intro-content">
+      <div class="logo-kanji">忍</div>
+      <h1 class="site-title">NARUTO HAND SIGNS</h1>
+      <p class="site-subtitle">أتقن حركات الشاكرا · Master the Chakra Seals</p>
+      <div class="mode-cards">
+        <div class="mode-card" id="btn-explore" onclick="startMode('explore')">
+          <div class="mode-icon">🖐</div>
+          <div class="mode-name">تجربة حرة</div>
+          <div class="mode-desc">شاهد يديك وتتبعهم في الوقت الفعلي</div>
+        </div>
+        <div class="mode-card" id="btn-challenge" onclick="startMode('challenge')">
+          <div class="mode-icon">⚡</div>
+          <div class="mode-name">تحدي الجوتسو</div>
+          <div class="mode-desc">أدِّ حركات ناروتو وأثبت قدرتك</div>
+        </div>
       </div>
     </div>
-    <nav id="tabs">
-      <button class="tab active" data-tab="live">🎯 مباشر</button>
-      <button class="tab" data-tab="challenge">⚡ تحديات</button>
-      <button class="tab" data-tab="powers">🧠 قدرات</button>
-      <button class="tab" data-tab="draw">🎨 رسم</button>
-    </nav>
-    <div id="hdr-info">
-      <div class="chip"><span id="status-dot" class="dot"></span><span id="status-text">تهيئة...</span></div>
-      <div class="chip mono" id="fps-el">-- FPS</div>
-      <div class="chip mono" id="clock-el">--:--:--</div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="app" class="hidden">
+
+    <!-- Header -->
+    <header>
+      <button class="back-btn" onclick="goBack()">← رجوع</button>
+      <div class="header-title" id="header-title">تجربة حرة</div>
+      <div class="score-display hidden" id="score-display">
+        <span class="score-label">النقاط</span>
+        <span class="score-val" id="score-val">0</span>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <main>
+      <!-- Camera panel -->
+      <div class="camera-panel" id="camera-panel">
+        <div class="camera-frame">
+          <video id="video" autoplay muted playsinline></video>
+          <canvas id="overlay"></canvas>
+
+          <!-- Corner decorations -->
+          <div class="corner tl"></div>
+          <div class="corner tr"></div>
+          <div class="corner bl"></div>
+          <div class="corner br"></div>
+
+          <!-- Status bar -->
+          <div class="cam-status" id="cam-status">
+            <span class="status-dot"></span>
+            <span id="status-text">جاري تشغيل الكاميرا...</span>
+          </div>
+
+          <!-- Merge indicator -->
+          <div class="merge-indicator hidden" id="merge-indicator">⚡ دمج الطاقة!</div>
+        </div>
+
+        <!-- Explore labels -->
+        <div class="hand-labels" id="hand-labels">
+          <div class="hand-label" id="label-left">اليد اليسرى</div>
+          <div class="hand-label" id="label-right">اليد اليمنى</div>
+        </div>
+      </div>
+
+      <!-- Challenge panel (only in challenge mode) -->
+      <div class="challenge-panel hidden" id="challenge-panel">
+        <div class="sign-comparison">
+          <div class="target-sign">
+            <div class="sign-label">الحركة المطلوبة</div>
+            <div class="sign-images" id="sign-images"></div>
+          </div>
+          <div class="match-status" id="match-status">
+            <div class="match-circle" id="match-circle">
+              <span id="match-pct">0%</span>
+            </div>
+            <div class="match-label">التطابق</div>
+          </div>
+        </div>
+
+        <!-- Timer bar -->
+        <div class="timer-wrap">
+          <div class="timer-label">الوقت المتبقي</div>
+          <div class="timer-bar-outer">
+            <div class="timer-bar" id="timer-bar"></div>
+          </div>
+          <div class="timer-sec" id="timer-sec">5</div>
+        </div>
+
+        <!-- Level indicator -->
+        <div class="level-info">
+          <span class="level-label">المستوى <span id="level-num">1</span></span>
+          <span class="sign-counter">الحركة <span id="sign-idx">1</span>/<span id="sign-total">2</span></span>
+        </div>
+
+        <!-- Progress dots -->
+        <div class="progress-dots" id="progress-dots"></div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- RESULT OVERLAY -->
+  <div id="result-overlay" class="hidden">
+    <div class="result-box">
+      <div class="result-kanji" id="result-kanji">✓</div>
+      <div class="result-title" id="result-title">أحسنت!</div>
+      <div class="result-sub" id="result-sub"></div>
+      <button class="result-btn" id="result-btn" onclick="nextRound()">التحدي التالي ⚡</button>
     </div>
-  </header>
+  </div>
 
-  <main>
-    <div id="cam-box">
-      <div class="corner tl"></div><div class="corner tr"></div>
-      <div class="corner bl"></div><div class="corner br"></div>
-      <div id="scan-line"></div>
-
-      <!-- كانفاس الكاميرا + هيكل اليد -->
-      <canvas id="cv"></canvas>
-      <!-- كانفاس الرسم (فوق الكاميرا) -->
-      <canvas id="draw-cv"></canvas>
-
-      <video id="vid" autoplay playsinline muted
-             style="position:absolute;visibility:hidden;width:1px;height:1px;top:0;left:0"></video>
-
-      <!-- LIVE overlays -->
-      <div id="ov-live" class="tab-ov active">
-        <div id="gesture-badge">
-          <div id="gb-ring-wrap">
-            <svg viewBox="0 0 100 100">
-              <circle class="rt" cx="50" cy="50" r="44"/>
-              <circle class="rp" id="ring-p" cx="50" cy="50" r="44"/>
-            </svg>
-            <div id="gb-emoji">✋</div>
-          </div>
-          <div id="gb-text">
-            <div id="gb-label">في انتظار</div>
-            <div id="gb-name">الإيماءة</div>
-          </div>
-        </div>
-        <div class="hud" style="top:48px;left:14px">
-          <div class="hr"><span class="hk">HANDS</span><span class="hv mono" id="hand-count">0</span></div>
-          <div class="hr"><span class="hk">STATE</span><span class="hv" id="g-state">--</span></div>
-        </div>
-      </div>
-
-      <!-- CHALLENGE overlays -->
-      <div id="ov-challenge" class="tab-ov">
-        <div id="ch-target">
-          <div class="ov-lbl">الإيماءة المطلوبة</div>
-          <div id="ch-t-emoji">🎯</div>
-          <div id="ch-t-name">اضغط ابدأ</div>
-        </div>
-        <div id="ch-detected">
-          <div class="ov-lbl">إيماءتك</div>
-          <div id="ch-d-emoji">✋</div>
-          <div id="ch-d-name">--</div>
-        </div>
-        <div id="ch-timer-wrap">
-          <div id="ch-timer-bg"><div id="ch-timer-bar"></div></div>
-          <div id="ch-timer-num">10</div>
-        </div>
-        <div id="ch-flash"></div>
-      </div>
-
-      <!-- POWERS overlays -->
-      <div id="ov-powers" class="tab-ov">
-        <div class="hud" style="top:48px;left:14px">
-          <div class="hr"><span class="hk">اليد اليمنى</span><span id="pw-right" class="hv pw-chip">--</span></div>
-          <div class="hr"><span class="hk">اليد اليسرى</span><span id="pw-left" class="hv pw-chip">--</span></div>
-        </div>
-        <div id="pw-rec-ind" class="hidden"><span class="rdot"></span> REC</div>
-        <div id="pw-bar-wrap" class="hidden">
-          <div id="pw-bar-bg"><div id="pw-bar-fill"></div></div>
-          <span id="pw-bar-lbl">0/20</span>
-        </div>
-        <div id="pw-cd" class="full-ov hidden"><div id="pw-cd-n">3</div><div id="pw-cd-s">استعد...</div></div>
-        <div id="pw-play-ov" class="full-ov hidden">
-          <div id="pw-pe">🎯</div><div id="pw-pn">--</div>
-          <div id="pw-ph">ثبّت الإيماءة</div>
-          <div id="pw-prog-wrap"><div id="pw-prog"></div></div>
-        </div>
-      </div>
-
-      <!-- DRAW overlays -->
-      <div id="ov-draw" class="tab-ov">
-        <!-- مؤشر اللون الحالي -->
-        <div id="draw-color-hud" class="hud" style="top:48px;right:14px">
-          <div class="hr"><span class="hk">اللون</span><div id="draw-color-dot"></div></div>
-          <div class="hr"><span class="hk">الوضع</span><span id="draw-mode-lbl" class="hv">رسم ✏️</span></div>
-        </div>
-        <!-- دليل الحركات -->
-        <div id="draw-hint">
-          <span>☝️ ارفع سبابتك للرسم</span>
-          <span>👍 إبهام لأعلى = لون جديد</span>
-          <span>🖐️ السلام + لمس = ممحاة</span>
-        </div>
-      </div>
-
-    </div><!-- cam-box -->
-
-    <div id="panels">
-
-      <!-- LIVE panel -->
-      <aside id="panel-live" class="panel active">
-        <div class="pt"><span>الإيماءات</span><span class="pb">6</span></div>
-        <div id="gcards">
-          <div class="gc" data-id="open_hand"    data-color="#fb923c"><span class="gi">🖐️</span><div class="gg"><div class="gn">السلام</div><div class="gd">كل الأصابع مرفوعة</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
-          <div class="gc" data-id="four_fingers" data-color="#f472b6"><span class="gi">🤘</span><div class="gg"><div class="gn">أربعة أصابع</div><div class="gd">بدون إبهام</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
-          <div class="gc" data-id="three_fingers"data-color="#c084fc"><span class="gi">🤟</span><div class="gg"><div class="gn">ثلاثة أصابع</div><div class="gd">إبهام+سبابة+وسطى</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
-          <div class="gc" data-id="peace"        data-color="#38bdf8"><span class="gi">✌️</span><div class="gg"><div class="gn">علامة النصر</div><div class="gd">سبابة ووسطى</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
-          <div class="gc" data-id="gun"          data-color="#f472b6"><span class="gi">🤙</span><div class="gg"><div class="gn">إبهام وسبابة</div><div class="gd">شكل L</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
-          <div class="gc" data-id="thumb_up"     data-color="#4ade80"><span class="gi">👍</span><div class="gg"><div class="gn">إبهام لأعلى</div><div class="gd">الإبهام فقط</div><div class="gbar"><div class="gbf"></div></div></div><div class="gdot"></div></div>
-        </div>
-        <div class="pt" style="margin-top:8px"><span>سجل النشاط</span><span class="pb" id="log-count">0</span></div>
-        <div id="log"></div>
-      </aside>
-
-      <!-- CHALLENGE panel -->
-      <aside id="panel-challenge" class="panel">
-        <div id="ch-level-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span class="mono-xs">المستوى</span><div id="ch-lvl-badge">1</div>
-          </div>
-          <div style="font-size:.76rem;color:var(--mu);margin-bottom:7px">أداء <span id="ch-req">2</span> إيماءات</div>
-          <div id="ch-stars"><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span></div>
-        </div>
-        <div id="ch-stats">
-          <div class="cs"><div class="csv" id="ch-score">0</div><div class="csk">نقاط</div></div>
-          <div class="cs"><div class="csv" id="ch-combo">x1</div><div class="csk">مضاعف</div></div>
-          <div class="cs"><div class="csv" id="ch-streak">0</div><div class="csk">متتالية</div></div>
-        </div>
-        <div class="pt"><span>التسلسل</span></div>
-        <div id="ch-seq"></div>
-        <div class="pt" style="margin-top:6px"><span>السجل</span></div>
-        <div id="ch-hist"></div>
-        <div id="ch-btns">
-          <button id="ch-start" class="btn primary">▶ ابدأ التحدي</button>
-          <button id="ch-reset" class="btn danger">↺ إعادة</button>
-        </div>
-      </aside>
-
-      <!-- POWERS panel -->
-      <aside id="panel-powers" class="panel">
-        <div id="pw-tabs">
-          <button class="ptab active" data-m="rec">⏺ تسجيل</button>
-          <button class="ptab" data-m="play">▶ اختبار</button>
-        </div>
-        <div id="pw-rec-sec">
-          <div class="pt"><span>تسجيل تسلسل</span><span class="pb" id="pw-badge">0/20</span></div>
-          <input id="pw-name" type="text" placeholder="اسم التسلسل..." maxlength="24" autocomplete="off"/>
-          <div id="pw-preview"></div>
-          <div style="display:flex;flex-direction:column;gap:5px">
-            <button id="pw-btn-start" class="btn primary">⏺ ابدأ التسجيل</button>
-            <button id="pw-btn-stop"  class="btn" disabled>⏹ إيقاف</button>
-            <button id="pw-btn-clear" class="btn danger">🗑 مسح</button>
-            <button id="pw-btn-save"  class="btn success" disabled>💾 حفظ</button>
-          </div>
-        </div>
-        <div id="pw-play-sec" class="hidden">
-          <div class="pt"><span>التسلسلات</span><span class="pb" id="pw-saved-count">0</span></div>
-          <div id="pw-saved-list"></div>
-          <button id="pw-btn-play" class="btn primary" disabled>▶ ابدأ الاختبار</button>
-          <div id="pw-result" class="hidden">
-            <div class="pt" style="margin-top:4px"><span>النتيجة</span></div>
-            <div id="pw-res-row">
-              <div class="rs"><div class="rsv ok" id="pw-ok">0</div><div class="rsk">صحيح</div></div>
-              <div class="rs"><div class="rsv err" id="pw-err">0</div><div class="rsk">خطأ</div></div>
-              <div class="rs"><div class="rsv acc" id="pw-acc">0%</div><div class="rsk">دقة</div></div>
-            </div>
-            <div id="pw-steps"></div>
-          </div>
-        </div>
-      </aside>
-
-      <!-- DRAW panel -->
-      <aside id="panel-draw" class="panel">
-        <div class="pt"><span>🎨 الرسم بالإيماءة</span></div>
-        <div id="draw-info">
-          <div class="draw-row">
-            <div class="draw-icon">☝️</div>
-            <div>
-              <div class="draw-title">الرسم</div>
-              <div class="draw-desc">ارفع السبابة فقط — حرّكها لترسم</div>
-            </div>
-          </div>
-          <div class="draw-row">
-            <div class="draw-icon">👍</div>
-            <div>
-              <div class="draw-title">تغيير اللون</div>
-              <div class="draw-desc">ارفع الإبهام فقط — يدور بين الألوان</div>
-            </div>
-          </div>
-          <div class="draw-row">
-            <div class="draw-icon">🖐️</div>
-            <div>
-              <div class="draw-title">الممحاة</div>
-              <div class="draw-desc">السلام + حرّك يدك فوق خط لتمحوه</div>
-            </div>
-          </div>
-          <div class="draw-row">
-            <div class="draw-icon">✊</div>
-            <div>
-              <div class="draw-title">توقف</div>
-              <div class="draw-desc">اقبض يدك لإيقاف الرسم مؤقتاً</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="pt" style="margin-top:4px"><span>لوحة الألوان</span></div>
-        <div id="draw-palette"></div>
-
-        <div class="pt" style="margin-top:4px"><span>أدوات</span></div>
-        <div id="draw-tools">
-          <div class="draw-stat"><span class="draw-sk">الخطوط</span><span id="draw-lines-count" class="draw-sv">0</span></div>
-          <div class="draw-stat"><span class="draw-sk">اللون</span><div id="draw-cur-color-box"></div></div>
-        </div>
-        <button id="draw-clear-all" class="btn danger" style="margin-top:6px">🗑 مسح الكل</button>
-      </aside>
-
-    </div>
-  </main>
-</div>
-
-<script src="script.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.min.js" crossorigin="anonymous"></script>
+  <script src="script.js"></script>
 </body>
 </html>
